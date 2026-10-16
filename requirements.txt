@@ -1,0 +1,7 @@
+# PyTorch with CUDA must be installed first, from the PyTorch index:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+# (use the CPU build if you have no NVIDIA GPU: drop --index-url)
+ultralytics>=8.4
+opencv-python>=4.10
+streamlit>=1.40
+pandas>=2.0
