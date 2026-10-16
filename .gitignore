@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# Virtual environments
+.venv/
+venv/
+env/
+.conda/
+
+# Environment / secrets
+.env
+.env.*
+*.key
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Videos
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+
+# Datasets
+data/
+datasets/
+*.zip
+*.tar
+*.tar.gz
+
+# Model weights
+*.pt
+*.pth
+*.onnx
+*.engine
+*.torchscript
+
+# Training / inference outputs (Ultralytics)
+runs/
+outputs/
+wandb/
+mlruns/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Claude Code local settings
+.claude/settings.local.json
