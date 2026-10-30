@@ -15,7 +15,7 @@ We take an ice hockey clip, detect players, referees and the **puck**, and proje
 | Part | Status |
 |---|---|
 | Pretrained baseline (E0) | Done: players OK, puck almost never found (1/465 frames). See [`docs/experiments.md`](docs/experiments.md) |
-| Puck annotation (40–80 frames) | To do |
+| Puck annotation (40–80 frames) | In progress: candidate frames extracted (`scripts/extract_frames.py`) |
 | Puck fine-tuning + mAP@50 / mAP@50:95 | To do |
 | Homography + rink minimap | To do |
 | Streamlit dashboard | To do |
@@ -29,6 +29,7 @@ CLAUDE.md                    guidance for Claude Code (AI assistant) in this rep
 requirements.txt             Python dependencies (install PyTorch first, see below)
 scripts/
   baseline.py                E0: pretrained COCO YOLO on a clip, writes annotated video + CSV
+  extract_frames.py          full-res candidate frames + contact sheet, for choosing annotation frames
 docs/
   experiments.md             experiment log: one entry per run (config, results, conclusions)
 Video/                       input clips              (not in git; share via the team drive)
@@ -77,6 +78,14 @@ Run the pretrained baseline (results go to `outputs/baseline/<run>/`):
 ```bash
 python scripts/baseline.py --video Video/hockey_clip_4k_noaudio.mp4 --imgsz 1280 --stride 2
 ```
+
+Extract candidate frames for annotation, at full 4K, every 10th frame (93 frames from the 31 s clip). This writes the images, `frames.csv` and a `contact_sheet.jpg` overview to `data/frames/<clip>/`:
+
+```bash
+python scripts/extract_frames.py --video Video/hockey_clip_4k_noaudio.mp4
+```
+
+Pick the 40–80 annotation frames from the contact sheet. Filenames contain the frame index (`_f000570.jpg`), so the train/val split can be done by time.
 
 ## Team conventions
 
