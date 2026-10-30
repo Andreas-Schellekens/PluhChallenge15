@@ -15,9 +15,9 @@ We take an ice hockey clip, detect players, referees and the **puck**, and proje
 | Part | Status |
 |---|---|
 | Pretrained baseline (E0) | Done: players OK, puck almost never found (1/465 frames). See [`docs/experiments.md`](docs/experiments.md) |
-| Puck annotation (40–80 frames) | In progress: candidate frames extracted (`scripts/extract_frames.py`) |
+| Puck annotation (40–80 frames) | In progress: 12 frames labelled and reviewed, see [`docs/annotation.md`](docs/annotation.md) |
 | Puck fine-tuning + mAP@50 / mAP@50:95 | To do |
-| Homography + rink minimap | To do |
+| Homography + rink minimap | Done for the main clip (H1): 5 keypoints + SIFT drift correction, see [`docs/experiments.md`](docs/experiments.md) |
 | Streamlit dashboard | To do |
 | Extra Mile (tracking / keypoints / team colours) | To choose |
 
@@ -30,8 +30,13 @@ requirements.txt             Python dependencies (install PyTorch first, see bel
 scripts/
   baseline.py                E0: pretrained COCO YOLO on a clip, writes annotated video + CSV
   extract_frames.py          full-res candidate frames + contact sheet, for choosing annotation frames
+  homography.py              H1: image -> rink homography per frame, player positions, minimap video
+  rink.py                    NHL rink dimensions, coordinate system and minimap drawing
+configs/
+  keypoints_hockey_clip_4k.json   hand-measured rink keypoints for the homography
 docs/
   experiments.md             experiment log: one entry per run (config, results, conclusions)
+  annotation.md              puck labelling rules, review status and split plan
 Video/                       input clips              (not in git; share via the team drive)
 data/                        annotated datasets       (not in git)
 outputs/                     run outputs, weights     (not in git; reproduce from the logged command)
@@ -86,6 +91,12 @@ python scripts/extract_frames.py --video Video/hockey_clip_4k_noaudio.mp4
 ```
 
 Pick the 40–80 annotation frames from the contact sheet. Filenames contain the frame index (`_f000570.jpg`), so the train/val split can be done by time.
+
+Map the players onto the rink and make the minimap video (needs `detections.csv` from the baseline). Results go to `outputs/homography/<run>/`:
+
+```bash
+python scripts/homography.py --video Video/hockey_clip_4k_noaudio.mp4 --detections outputs/baseline/yolo26s_1280_rtx4060/detections.csv
+```
 
 ## Team conventions
 

@@ -63,7 +63,7 @@ Same method, with one improvement learned from the pilot: candidates are now ran
 
 ## Status and implication for dataset size
 
-- **Labelled (in Review):** 12 frames. Pilot: f060, f150, f510, f570, f660. Batch 2: f090, f120, f360, f600, f630, f720, f780.
+- **Labelled and human-reviewed:** 12 frames. Pilot: f060, f150, f510, f570, f660. Batch 2: f090, f120, f360, f600, f630, f720, f780. All 12 were checked and approved by Andreas in Roboflow Review (2026-10-30), 0 rejected, and moved into the dataset. In Roboflow they are all in `train`: the time-based train/val split is done by us after export, not by Roboflow's random split.
 - **Unsure:** 4 frames (f030, f300, f840, f900).
 - **Not found:** 15 frames.
 

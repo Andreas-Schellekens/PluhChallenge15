@@ -1,0 +1,12 @@
+{
+  "video": "Video/hockey_clip_4k_noaudio.mp4",
+  "reference_frame": 0,
+  "note": "Image points measured by hand in zoomed crops of frame 0 (centre of the faceoff dot; base of the goal post on the ice). Rink points in feet, see scripts/rink.py for the coordinate system.",
+  "points": [
+    {"name": "end-zone dot, camera side", "image": [1121, 1337], "rink": [-69, 22]},
+    {"name": "end-zone dot, far side", "image": [2580, 1141], "rink": [-69, -22]},
+    {"name": "neutral-zone dot, camera side", "image": [1770, 1950], "rink": [-20, 22]},
+    {"name": "neutral-zone dot, far side", "image": [3465, 1677], "rink": [-20, -22]},
+    {"name": "goal post base, far side", "image": [1723, 1039], "rink": [-89, -3]}
+  ]
+}
