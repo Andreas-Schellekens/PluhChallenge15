@@ -1,0 +1,13 @@
+{
+  "video": "Video/fillempje.mp4",
+  "reference_frame": 1800,
+  "rink": "iihf",
+  "lens": {"k1": -0.125, "f": 1000, "center": [960, 540]},
+  "note": "Static camera behind the near goal, looking down the rink (+X). Image left = -Y (top of the minimap). Points measured by hand on the median background of the clip (outputs/propose_puck/fillempje/background_color.jpg), which equals every frame after the first second because the camera does not move. Lens k1 from straightening the yellow kick-plate lines (plumb-line). Rink in metres, IIHF dimensions assumed.",
+  "points": [
+    {"name": "end-zone dot, left", "image": [430, 578], "rink": [-20, -7]},
+    {"name": "end-zone dot, right", "image": [1477, 530], "rink": [-20, 7]},
+    {"name": "crease corner on goal line, left", "image": [630, 798], "rink": [-26, -1.83]},
+    {"name": "crease corner on goal line, right", "image": [1305, 778], "rink": [-26, 1.83]}
+  ]
+}

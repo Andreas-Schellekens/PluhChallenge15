@@ -10,7 +10,7 @@ Pipeline: `.mp4` clip → object detection (players/referees + fine-tuned small 
 
 Scope: planar sports only (soccer, basketball, tennis, ice/field hockey), single static camera angle.
 
-**Our choice: ice hockey.** Main clip `Video/hockey_clip_4k_noaudio.mp4` (3840×2160, 30 fps, 31 s, NHL Wild vs Blues, handheld from the stands, so framing drifts slightly). The data gap is the **puck**: about 15 px wide at 4K, almost never detected by COCO YOLO (see experiment E0 in `docs/experiments.md`). Players and referees use pretrained COCO `person`.
+**Our choice: ice hockey.** Main clip (since 2026-10-30): `Video/fillempje.mp4` (1920×1080, 59.94 fps, ~85 s, amateur game, static wide-angle action camera behind the near goal). The data gap is the **puck**: about 6–10 px, found by COCO YOLO in only 10/2548 frames (E0-B). Players and referees use pretrained COCO `person`. The homography needs lens correction (k1) and an IIHF rink template in metres (H2). The first clip `Video/hockey_clip_4k_noaudio.mp4` (4K, handheld) is kept as experiment history (E0, H1).
 
 ## Repository layout
 

@@ -97,3 +97,79 @@ Only ~40% of checked frames had a clearly findable puck. Many frames hide it beh
 ## Train/val split
 
 Split by time, not randomly: neighbouring frames are near-duplicates and would leak into validation. Proposal: frames from the first ~80% of the clip for train and the last ~20% for val. A second clip would be a better val/test set.
+
+---
+
+# Clip 2: `fillempje.mp4` (main clip from 2026-10-30)
+
+## Frames
+
+`python scripts/extract_frames.py --video Video/fillempje.mp4 --stride 30 --start 1.0`
+gives 168 frames, one every 0.5 s from 1 s onwards (the camera moves during the first second).
+They are saved to `data/frames/fillempje/`.
+
+## Assisted proposals (`scripts/propose_puck.py`)
+
+The camera is static, so we can model the background:
+1. **Median background** over all frames: the empty rink. Lines, net and ads drop out.
+2. **Foreground** = pixels clearly darker than that background.
+3. **Blob filters:**
+   - small and compact;
+   - dark in absolute terms (glare flickers);
+   - bright ice around the blob;
+   - not in the skate zone of a person box from E0-B.
+4. **Temporal check:** the blob must reappear nearby 3 frames earlier or later.
+
+Effect of the filters: from 1762 candidates to 214, in 125 of 168 frames.
+
+**Known bias:** pucks at a player's feet or touching a glove are removed by the filters, so
+the proposals favour pucks in open ice. That is an annotation choice which comes back in the
+error analysis.
+
+## Visual check (Claude Code, GenAI) → Roboflow Review
+
+Claude checked the top 3 candidates of every frame in zoomed montages:
+
+| group | frames | meaning |
+|---|---|---|
+| `puck-confident` | 26 | clearly the puck, on open ice |
+| `puck-unsure` | 40 | mostly a dark spot at the tip of a stick blade: puck on the blade, or black tape? Plus a series f3240–f3390 of a dark streak between two players at a faceoff |
+| no proposal | ~100 | puck occluded by players or the net, at someone's feet, or not visible |
+
+All 66 were uploaded to Roboflow (tags `fillempje`, `puck-confident` / `puck-unsure`), with
+the box as a **prediction routed to Review**. Box = the dark core of the blob plus 2 px on
+every side, so 6–21 px. Nothing enters the dataset until a team member approves it.
+Proposals with their boxes: `outputs/propose_puck/fillempje/proposals.csv`.
+
+**Reviewer rule for `puck-unsure`:** approve only if the puck is clearly separate from the
+blade, or if the neighbouring frames in the video show that it is the puck. Otherwise reject.
+Unclear cases are not labelled.
+
+## Split
+
+By time, as for clip 1: the last ~20% of the clip (frames ≥ 4200, i.e. from about 70 s)
+goes to val.
+
+## Review result (Andreas, 2026-10-30)
+
+| group | proposed | approved | rejected | precision of the AI proposal |
+|---|---|---|---|---|
+| `puck-confident` | 26 | 17 | 9 | 65% |
+| `puck-unsure` | 40 | 3 | 37 | 8% |
+| **total** | 66 | **20** | 46 | |
+
+- **Rejected "confident" proposals:** f060, f090, f150, f270, f1470, f1830, f4110, f4140, f4230.
+  - f060/f090/f150 sit at almost the same spot at the far end, so it was probably a static object there, not the puck.
+  - f1470 and f4110 were along the boards.
+
+  Even in the group Claude was sure about, a third was wrong. That justifies the human review.
+- **Approved "unsure" proposals:** f2880, f3840, f5070.
+- **Corrected by the reviewer:** f2220. The box was moved, so the candidate was a different dark spot than the puck.
+- **Dataset:** Roboflow version 2 (filter tag `fillempje`, no preprocessing or augmentation): 20 images, 20 pucks.
+- **Split by time:**
+  - train: 16 frames (f330–f4080);
+  - val: 4 frames (f4200, f4560, f4950, f5070).
+
+**Still below target:** 20 frames, where the assignment asks for 40–80. Next labelling round:
+take extra frames near the approved ones (the puck is then nearby, which makes it easy to find)
+and frames from parts of the clip with no labels yet. Then a new review.

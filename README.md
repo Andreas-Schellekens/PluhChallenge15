@@ -12,13 +12,15 @@ We take an ice hockey clip, detect players, referees and the **puck**, and proje
 
 ## Status
 
+Main clip since 2026-10-30: `Video/fillempje.mp4` (static camera behind the goal, 1080p). The first clip (`hockey_clip_4k_noaudio.mp4`, handheld 4K) is kept as experiment history.
+
 | Part | Status |
 |---|---|
-| Pretrained baseline (E0) | Done: players OK, puck almost never found (1/465 frames). See [`docs/experiments.md`](docs/experiments.md) |
-| Puck annotation (40–80 frames) | In progress: 12 frames labelled and reviewed, see [`docs/annotation.md`](docs/annotation.md) |
-| Puck fine-tuning + mAP@50 / mAP@50:95 | To do |
-| Homography + rink minimap | Done for the main clip (H1): 5 keypoints + SIFT drift correction, see [`docs/experiments.md`](docs/experiments.md) |
-| Streamlit dashboard | To do |
+| Pretrained baseline (E0, E0-B) | Done: players OK, puck in only 10/2548 frames (high precision, almost no recall). See [`docs/experiments.md`](docs/experiments.md) |
+| Puck annotation (40–80 frames) | 20 human-reviewed frames (66 proposals, 20 approved); second round needed to reach 40–80. See [`docs/annotation.md`](docs/annotation.md) |
+| Puck fine-tuning + mAP@50 / mAP@50:95 | Done (E1): tile val mAP@50 0.789 / mAP@50:95 0.506; full frames recall 0/4 → 2/4, AP@50 0 → 0.75 vs baseline. See [`docs/experiments.md`](docs/experiments.md) |
+| Homography + rink minimap | Done (H2): lens correction + 4 keypoints, IIHF template |
+| Streamlit dashboard | Done: `streamlit run app.py`, all parameters adjustable |
 | Extra Mile (tracking / keypoints / team colours) | To choose |
 
 ## Repository layout
@@ -27,13 +29,20 @@ We take an ice hockey clip, detect players, referees and the **puck**, and proje
 CV_Challenge_2026_2027.pdf   assignment brief
 CLAUDE.md                    guidance for Claude Code (AI assistant) in this repo
 requirements.txt             Python dependencies (install PyTorch first, see below)
+app.py                       Streamlit dashboard: video + minimap, all parameters in the sidebar
 scripts/
   baseline.py                E0: pretrained COCO YOLO on a clip, writes annotated video + CSV
   extract_frames.py          full-res candidate frames + contact sheet, for choosing annotation frames
-  homography.py              H1: image -> rink homography per frame, player positions, minimap video
-  rink.py                    NHL rink dimensions, coordinate system and minimap drawing
+  propose_puck.py            assisted labelling: background subtraction -> puck candidates + montages
+  make_puck_dataset.py       Roboflow export -> tiled dataset with a time-based train/val split
+  train_puck.py              fine-tune YOLO26 on the puck tiles
+  eval_puck.py               baseline vs fine-tuned on full frames: confusion matrix, AP50, examples
+  homography.py              image -> rink mapping (lens correction, homography, camera motion), minimap video
+  pipeline.py                per-frame glue used by the app: detect -> map -> draw
+  rink.py                    NHL (ft) and IIHF (m) rink templates and minimap drawing
 configs/
-  keypoints_hockey_clip_4k.json   hand-measured rink keypoints for the homography
+  keypoints_fillempje.json        rink keypoints + lens model for the main clip
+  keypoints_hockey_clip_4k.json   same for the first clip
 docs/
   experiments.md             experiment log: one entry per run (config, results, conclusions)
   annotation.md              puck labelling rules, review status and split plan
@@ -74,28 +83,52 @@ python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_
 
 No NVIDIA GPU? Install torch without `--index-url`. Everything still works, just slower.
 
-Then put the clip at `Video/hockey_clip_4k_noaudio.mp4` (from the team drive).
+Then put the clips in `Video/` (from the team drive): `fillempje.mp4` (main) and `hockey_clip_4k_noaudio.mp4`.
 
 ## Usage
 
-Run the pretrained baseline (results go to `outputs/baseline/<run>/`):
+The dashboard (opens in the browser):
 
 ```bash
-python scripts/baseline.py --video Video/hockey_clip_4k_noaudio.mp4 --imgsz 1280 --stride 2
+streamlit run app.py
 ```
 
-Extract candidate frames for annotation, at full 4K, every 10th frame (93 frames from the 31 s clip). This writes the images, `frames.csv` and a `contact_sheet.jpg` overview to `data/frames/<clip>/`:
+The steps behind it, in order. Every command is also logged in `docs/experiments.md`.
+
+1. Pretrained baseline: person boxes for the homography, and the "sports ball" reference for the puck.
 
 ```bash
-python scripts/extract_frames.py --video Video/hockey_clip_4k_noaudio.mp4
+python scripts/baseline.py --video Video/fillempje.mp4 --imgsz 1280 --stride 2 --name fillempje_yolo26s_1280
 ```
 
-Pick the 40–80 annotation frames from the contact sheet. Filenames contain the frame index (`_f000570.jpg`), so the train/val split can be done by time.
-
-Map the players onto the rink and make the minimap video (needs `detections.csv` from the baseline). Results go to `outputs/homography/<run>/`:
+2. Frames for annotation (every 0.5 s), then puck candidates for assisted labelling:
 
 ```bash
-python scripts/homography.py --video Video/hockey_clip_4k_noaudio.mp4 --detections outputs/baseline/yolo26s_1280_rtx4060/detections.csv
+python scripts/extract_frames.py --video Video/fillempje.mp4 --stride 30 --start 1.0
+```
+
+```bash
+python scripts/propose_puck.py --video Video/fillempje.mp4 --frames data/frames/fillempje --detections outputs/baseline/fillempje_yolo26s_1280/detections.csv
+```
+
+3. After the Roboflow review: export the version (YOLO format, no resize), tile it, train, compare:
+
+```bash
+python scripts/make_puck_dataset.py --export data/roboflow/<export-folder> --val-from-frame 4200 --name fillempje_tiles640
+```
+
+```bash
+python scripts/train_puck.py --data data/puck_tiles/fillempje_tiles640/data.yaml --name fillempje_yolo26s_puck_640
+```
+
+```bash
+python scripts/eval_puck.py --finetuned outputs/train/fillempje_yolo26s_puck_640/weights/best.pt --frames data/puck_tiles/fillempje_tiles640/frames.csv --video Video/fillempje.mp4 --name fillempje
+```
+
+4. Homography and minimap video for the whole clip:
+
+```bash
+python scripts/homography.py --video Video/fillempje.mp4 --keypoints configs/keypoints_fillempje.json --detections outputs/baseline/fillempje_yolo26s_1280/detections.csv --drift none
 ```
 
 ## Team conventions
