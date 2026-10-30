@@ -39,6 +39,39 @@ Labelling rules, occlusion policy and split strategy for the `puck` class. **Sta
 
 "Not found" does **not** mean "no puck in the frame". Do not mark these as empty (negative) images until a person has checked them.
 
+## Batch 2 (2026-10-30): every 30th frame
+
+Same method, with one improvement learned from the pilot: candidates are now ranked by how bright their surroundings are instead of by contrast. The real pilot pucks all sit on clean ice (surrounding brightness 225–240). With the new ranking they rank 1st–2nd instead of 7th–23rd, so only the top 18 candidates per frame need to be checked. Exception: a puck touching a stick ranked 11th.
+
+21 frames checked: f000, f030, f090, f120, f180, f210, f270, f300, f360, f390, f450, f480, f540, f600, f630, f690, f720, f780, f810, f870, f900.
+
+| frame | box (x, y, w, h in px) | note |
+|---|---|---|
+| f090 | 3305, 1288, 14, 12 | faint, likely **motion-blurred** |
+| f120 | 3211, 1372, 18, 13 | just ahead of a stick blade |
+| f360 | 3439, 1555, 17, 17 | rounder and larger than usual (tilted or airborne?) |
+| f600 | 2961, 1311, 17, 13 | on a painted line |
+| f630 | 1819, 1160, 19, 19 | between skates, crowded; lighter centre (ice spray?): **weakest label, check first** |
+| f720 | 2723, 1363, 18, 13 | open ice |
+| f780 | 2547, 1065, 14, 14 | small, near lines |
+
+**Unsure (not labelled, human decision needed):**
+- f030 (around 798, 1138) and f900 (around 2483, 1067): dark spot exactly at the end of a stick shaft. Puck or blade tape? Same case as f840.
+- f300 (around 1439, 2155): grey smudge cut off by the bottom edge of the frame, about half visible. The occlusion rule decides this one.
+
+**Not found (human check):** f000, f180, f210, f270, f390, f450, f480, f540, f690, f810, f870.
+
+## Status and implication for dataset size
+
+- **Labelled (in Review):** 12 frames. Pilot: f060, f150, f510, f570, f660. Batch 2: f090, f120, f360, f600, f630, f720, f780.
+- **Unsure:** 4 frames (f030, f300, f840, f900).
+- **Not found:** 15 frames.
+
+Only ~40% of checked frames had a clearly findable puck. Many frames hide it behind players, along the boards or on a stick. At that rate, all 93 candidate frames would give only ~35 positives, below the 40–80 target. Options:
+1. Extract more frames (`--stride 5`) in segments where the puck is in open play.
+2. Have a human find the puck in the "not found" frames: these are exactly the hard, high-value examples the brief asks for.
+3. Add a second clip, which would also be the best val/test set.
+
 ## Observations from the pilot
 
 - **The puck is grey, not black.** Its darkest pixel is about 90 on a 0–255 scale, and its core is 90–140. The 4K footage is soft, so the puck appears as a ~11×7 px blurred core with soft edges.
@@ -47,7 +80,8 @@ Labelling rules, occlusion policy and split strategy for the `puck` class. **Sta
   - dark dashes and letters in the board advertisements (e.g. under "TIcasino"), which look very puck-like;
   - stick blades with black tape;
   - dark spots in the crowd behind the glass;
-  - lettering on the ice.
+  - lettering on the ice;
+  - the black end of a stick blade (batch 2: f030, f270, f900).
 - **Hard positives:**
   - puck on a painted line (f570);
   - puck touching or under a stick blade (f660, f840).
