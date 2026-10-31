@@ -17,6 +17,13 @@ Train crops (random, seeded):
       there is only one puck, and it is labelled, so the rest of the frame has none.
       Most come from the ice area, where the hard look-alikes are (skates, stick
       tape, board ads); the rest from anywhere (crowd).
+  Hard negatives (added after E1, whose main false positives were skates and a
+  static dark spot on a sign behind the boards):
+  --skate-crops per frame: negative crops that contain a skate, taken from the
+      bottom-centre of a person box in --detections (baseline detections.csv)
+  --lookalike X Y: a fixed image point that the model mistook for a puck; every
+      train frame adds one negative crop containing it
+  Both are skipped when the crop would contain the labelled puck.
 Val tiles: the full overlapping grid that inference uses, so validation measures
 the real situation (many empty tiles, a few with the puck).
 
@@ -45,6 +52,10 @@ def parse_args():
     p.add_argument("--overlap", type=int, default=160, help="overlap of the val grid tiles (> puck size)")
     p.add_argument("--pos-crops", type=int, default=8, help="positive crops per train frame")
     p.add_argument("--neg-crops", type=int, default=16, help="negative crops per train frame")
+    p.add_argument("--detections", help="baseline detections.csv (person boxes), needed for --skate-crops")
+    p.add_argument("--skate-crops", type=int, default=0, help="negative crops around skates per train frame")
+    p.add_argument("--lookalike", type=int, nargs=2, action="append", default=[], metavar=("X", "Y"),
+                   help="static look-alike point (image px); repeatable")
     p.add_argument("--ice-top", type=int, default=380,
                    help="y above which there is only crowd/roof (380 for fillempje, ~600 for the 4K clip)")
     p.add_argument("--seed", type=int, default=0)
@@ -61,14 +72,22 @@ def grid_origins(size, tile, overlap):
     return xs
 
 
+def line_to_box(line, w, h):
+    """One YOLO label line (normalised) -> pixel box (x1, y1, x2, y2).
+    A box line is `class cx cy bw bh`. A polygon drawn in Roboflow (smart polygon) is
+    exported as `class x1 y1 x2 y2 ...`; we turn it into its tightest bounding box."""
+    v = list(map(float, line.split()))[1:]
+    if len(v) == 4:
+        cx, cy, bw, bh = v
+        return (cx - bw / 2) * w, (cy - bh / 2) * h, (cx + bw / 2) * w, (cy + bh / 2) * h
+    xs, ys = v[0::2], v[1::2]
+    return min(xs) * w, min(ys) * h, max(xs) * w, max(ys) * h
+
+
 def load_boxes(label_file, w, h):
-    """YOLO labels (class cx cy bw bh, normalised) -> list of pixel boxes (x1, y1, x2, y2)."""
-    boxes = []
-    for line in label_file.read_text().split("\n"):
-        if line.strip():
-            _, cx, cy, bw, bh = map(float, line.split())
-            boxes.append(((cx - bw / 2) * w, (cy - bh / 2) * h, (cx + bw / 2) * w, (cy + bh / 2) * h))
-    return boxes
+    """YOLO label file -> list of pixel boxes (x1, y1, x2, y2). Empty for a null image."""
+    text = label_file.read_text() if label_file.exists() else ""
+    return [line_to_box(line, w, h) for line in text.split("\n") if line.strip()]
 
 
 def crop_labels(boxes, x0, y0, tile, min_visible=0.5):
@@ -110,6 +129,7 @@ def main():
         (out / "images" / split).mkdir(parents=True, exist_ok=True)
         (out / "labels" / split).mkdir(parents=True, exist_ok=True)
 
+    persons = pd.read_csv(args.detections).query("`class` == 'person'") if args.detections else None
     T, rows, n_tiles = args.tile, [], {"train": [0, 0], "val": [0, 0]}  # [with puck, without]
     for img_path in sorted((export / "train" / "images").glob("*.jpg")):
         frame = int(re.search(r"_f(\d{6})", img_path.name).group(1))
@@ -134,6 +154,16 @@ def main():
                 if not any(overlaps(b, x0, y0, T, margin=8) for b in boxes):
                     origins.append((x0, y0))
                     n_neg += 1
+            # hard negatives: a point (skate or static look-alike) somewhere inside the crop
+            points = [tuple(p) for p in args.lookalike]
+            if persons is not None and args.skate_crops:
+                feet = persons[persons.frame == frame]
+                for _, d in feet.sample(min(args.skate_crops, len(feet)), random_state=rng.randint(0, 9999)).iterrows():
+                    points.append(((d.x1 + d.x2) / 2, d.y2))
+            for px, py in points:
+                x0, y0 = random_origin(rng, px, px, w, T), random_origin(rng, py, py, h, T)
+                if not any(overlaps(b, x0, y0, T, margin=8) for b in boxes):
+                    origins.append((x0, y0))
 
         for x0, y0 in origins:
             name = f"f{frame:06d}_x{x0}_y{y0}"

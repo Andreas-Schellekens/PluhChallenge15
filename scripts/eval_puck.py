@@ -45,6 +45,8 @@ import numpy as np
 import pandas as pd
 from ultralytics import YOLO
 
+from make_puck_dataset import load_boxes
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
@@ -136,12 +138,7 @@ def average_precision(all_scores, all_tp, n_gt):
 
 def load_gt(image_path, w, h):
     label = Path(str(image_path).replace("images", "labels")).with_suffix(".txt")
-    boxes = []
-    for line in label.read_text().split("\n"):
-        if line.strip():
-            _, cx, cy, bw, bh = map(float, line.split())
-            boxes.append([(cx - bw / 2) * w, (cy - bh / 2) * h, (cx + bw / 2) * w, (cy + bh / 2) * h])
-    return np.array(boxes).reshape(-1, 4)
+    return np.array(load_boxes(label, w, h)).reshape(-1, 4)
 
 
 def zoom(img, center, boxes_cols, size=160, out=320):

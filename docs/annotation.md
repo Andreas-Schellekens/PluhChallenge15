@@ -173,3 +173,89 @@ goes to val.
 **Still below target:** 20 frames, where the assignment asks for 40–80. Next labelling round:
 take extra frames near the approved ones (the puck is then nearby, which makes it easy to find)
 and frames from parts of the clip with no labels yet. Then a new review.
+
+## Round 2 (2026-10-31): model-assisted proposals
+
+**Why.** E1 left 20 frames (target 40–80), and its error analysis named the missing cases:
+pucks at skates, along the boards and far away, plus look-alikes as negatives.
+
+**Method: model in the loop.** The E1 model (`best.pt`) proposes pucks with tiled inference
+on all 148 extracted frames that are not yet labelled:
+
+`python scripts/propose_model.py --weights outputs/train/fillempje_yolo26s_puck_640/weights/best.pt --frames data/frames/fillempje --exclude data/puck_tiles/fillempje_tiles640/frames.csv --name fillempje_round2`
+
+At conf ≥ 0.15 it proposes something in 42 frames, and finds nothing in 106 frames.
+Claude Code checked every proposal in zoomed crops. For the doubtful ones it also compared:
+- the median background: a spot that is also there is painted or fixed, not the puck;
+- the frames 10 earlier and later: the puck moves.
+
+| group (Roboflow tag) | frames | meaning | prediction in Review |
+|---|---|---|---|
+| `model-confident` | 23 | clearly the puck, often at a stick blade | the model's box |
+| `model-unsure` | 8 | possible puck: under a skate (f1530), in the net (f2760), motion blur (f690), very far (f1710), lying still at the far end (f90) | the model's box |
+| `model-wrong` | 11 | the box is on something else: the logo sign behind the left boards (f4050, f5040), a helmet, a jersey, a skate, a face | the wrong box |
+| `manual` | 24 | the model found nothing: all 16 such frames from the val part (≥ f4200) + 8 spread over the rest | none |
+
+- **Upload.** The images were uploaded as `fillempje_r2_fNNNNNN.jpg` (re-encoded). This keeps
+  them separate from the round-1 copies, 15 of which were already rejected in Review.
+- **Bias.** The model only proposes what it already recognises (confirmation bias). That is
+  why the `manual` group exists: those frames are the cases the model misses.
+- **Note on f90.** Round 1 rejected f060/f090/f150 as a "static spot". The median background
+  is clean at that place, though, and the spot drifts slowly between frames. So it is probably
+  a puck lying still during a stoppage. The reviewer decides.
+
+**Reviewer instructions**
+- `model-confident` / `model-unsure`:
+  - approve if the box is on the puck; tighten it if needed;
+  - reject if you are not sure.
+- `model-wrong`:
+  - if the puck is visible elsewhere in the frame, move the box to it and approve;
+  - otherwise reject.
+- `manual` (Annotate, not Review):
+  - draw the box when ≥ 50% of the puck is visible;
+  - if the puck is really not visible (behind players or the net), mark the image as **null**
+    (no objects). It then becomes a verified frame without a puck, which is useful as a negative;
+  - if unsure, leave it unlabelled.
+
+**Result of the `manual` group (Andreas, 2026-10-31).** In only 1 of the 24 frames was the
+puck visible: f4500, barely. Andreas labelled it. In the other 23, the puck was hidden, by
+players, the net or skates. At Andreas' request Claude marked those 23 as **null** through the
+Roboflow API (an empty annotation, added to the dataset). They are now verified frames
+without a visible puck.
+- **Meaning for the error analysis.** When the model finds nothing, the puck is almost always
+  not visible at all. Most frames "without a detection" are therefore occlusion, not a missed
+  puck.
+- **Value for evaluation.** 15 of these frames are in the val part (≥ f4200), 8 in train. The val set can
+  now also count false positives on frames that have no puck.
+
+**Hard negatives in the dataset** (`make_puck_dataset.py`, new options). The E1 false
+positives are added as explicit negative crops. Every crop is checked not to contain the
+labelled puck, so it is a guaranteed negative:
+- `--skate-crops N`: crops containing a skate, taken from the bottom of the person boxes in
+  the E0-B detections. This fixes a gap from round 1: there, skates were filtered out of the
+  proposals, so the model never saw them as "not a puck".
+- `--lookalike 56 400`: the dark mark on the logo sign behind the left boards, a recurring
+  false positive at a fixed spot.
+
+## Review result, round 2 (Andreas, 2026-10-31)
+
+| group | proposed | approved | rejected | precision of the proposal |
+|---|---|---|---|---|
+| `model-confident` | 23 | 17 | 6 | 74% |
+| `model-unsure` | 8 | 3 (f690, f1710, f3240) | 5 | 38% |
+| `model-wrong` | 11 | 0 | 11 | – |
+| `manual` | 24 | 1 puck (f4500) + 23 null | – | – |
+
+- **Rejected `model-confident`:** f360, f390, f630, f1230, f3810, f3870. All of them are a
+  dark spot **touching a stick blade**. In f4590 the reviewer also moved the box away from the
+  blade, to the real puck at (1303, 509). So in practice: a puck that is not clearly separate
+  from the blade is not labelled.
+- **f4500** was drawn as a polygon. `make_puck_dataset.py` and `eval_puck.py` turn polygon
+  labels into their bounding box.
+- **Dataset:** Roboflow version 3, 64 images: 41 with a puck, 23 null.
+  - train (< f4200): 39 frames, 31 with a puck;
+  - val (≥ f4200): 25 frames, 10 with a puck and 15 null.
+
+  Target reached: 64 reviewed frames, within 40–80.
+- **Open labelling question for the team:** a puck touching the blade, yes or no? Right now it
+  is "no if unclear". That makes stick blades the most common false positive (E2).

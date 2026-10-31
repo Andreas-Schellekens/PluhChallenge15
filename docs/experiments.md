@@ -308,3 +308,81 @@ baseline. Recall over the whole clip is unknown, because the puck is often hidde
 clip, with no false positive on val and roughly 1 in 4 false positives on the clip. The
 failure modes point directly at the next labelling round: pucks at skates, at the boards and
 far away, plus rejected look-alikes as negatives, to reach 40–80 frames.
+
+## E2 – More data (round 2) and hard negatives, 2026-10-31
+
+**Data:** Roboflow version 3 (tag `fillempje`, no preprocessing or augmentation): 64 images,
+of which 41 have a puck and 23 are verified null. See `docs/annotation.md`, round 2.
+- Split by time, as before (≥ f4200 = val):
+  - train: 39 frames, 31 with a puck;
+  - val: 25 frames, 10 with a puck and 15 null.
+- The val set is now 2.5× larger, and it can also count false positives on frames that have no puck.
+
+Two runs, which differ **only** in the training data (same model, epochs, augmentation and
+seed as E1):
+
+| run | dataset | train tiles (with / without puck) |
+|---|---|---|
+| E2a | `fillempje_v3_tiles640` | 248 / 624 |
+| E2b | `fillempje_v3hn_tiles640`: + hard negatives (`--skate-crops 4 --lookalike 56 400`) | 248 / 747 |
+
+Commands (RTX 4060 Laptop, about 25 min per training run):
+```
+python scripts/make_puck_dataset.py --export data/roboflow/pluhchallenge_v3 --val-from-frame 4200 --name fillempje_v3_tiles640
+python scripts/make_puck_dataset.py --export data/roboflow/pluhchallenge_v3 --val-from-frame 4200 --detections outputs/baseline/fillempje_yolo26s_1280/detections.csv --skate-crops 4 --lookalike 56 400 --name fillempje_v3hn_tiles640
+python scripts/train_puck.py --data data/puck_tiles/fillempje_v3_tiles640/data.yaml --name fillempje_v3_yolo26s_puck_640
+python scripts/train_puck.py --data data/puck_tiles/fillempje_v3hn_tiles640/data.yaml --name fillempje_v3hn_yolo26s_puck_640
+python scripts/eval_puck.py --finetuned outputs/train/<run>/weights/best.pt --frames data/puck_tiles/fillempje_v3_tiles640/frames.csv --video Video/fillempje.mp4 --name v3val_<E1|E2a|E2b>
+```
+E1 was scored again on the new val set, so all models are compared on the same 25 frames.
+
+**Results**
+
+| model | tile val mAP@50 | tile val mAP@50:95 | full frames: TP / FP / FN | precision | recall | AP@50 | clip frames with a puck | clip sample: plausible puck |
+|---|---|---|---|---|---|---|---|---|
+| baseline (COCO sports ball) | – | – | 0 / 0 / 10 | – | 0.00 | 0.01 | 10 | – |
+| E1 (20 frames) | – | – | 5 / 2 / 5 | 0.71 | 0.50 | 0.58 | 753 | ~23 / 30 |
+| **E2a (41 frames)** | **0.634** | **0.382** | **6 / 1 / 4** | **0.86** | 0.60 | **0.65** | 455 | **~28 / 30** |
+| E2b (41 frames + hard negatives) | 0.460 | 0.269 | 7 / 11 / 3 | 0.39 | 0.70 | 0.55 | 1313 | ~19 / 30 |
+
+- The tile val numbers for E1 (0.789 / 0.506) were measured on the old val set of 4 frames,
+  so they cannot be compared with this column.
+- The clip samples (`clip_sample.jpg` in each eval folder) are 30 random detected frames,
+  checked by Claude Code, not by a team member.
+
+**Observations**
+1. **More data helps (E1 → E2a).** On the same val frames E2a finds one more puck and makes
+   one fewer false alarm, and AP@50 rises from 0.58 to 0.65.
+   - The clip shows the bigger difference. E2a reports a puck in fewer frames (455 vs 753), but
+     almost all of them look right: about 28 of 30, against about 23 of 30 for E1.
+   - The skate false positives of E1 are gone from the sample. E2a is more careful and much more
+     precise.
+2. **The hard negatives did not help (E2a → E2b).** E2b finds 1 more puck, but it gives
+   11 false alarms on val instead of 1. `val_false_positives.jpg` shows that they are
+   almost all **stick blades** (and a glove). In 7 of the 11 cases the frame was marked null,
+   so the reviewer saw no puck there.
+   - The clip says the same: more detections, lower precision. The far-end spot from round 1 is
+     back too (f86–f152).
+   - Possible causes, not proven:
+     - (a) The skate crops show many scenes around players' feet without a puck label. Sticks
+       and blades are near the feet, but they don't look like skates, so the extra negatives
+       teach little about blades.
+     - (b) Chance. There is only one seed, `best.pt` is picked on 10 val pucks (epoch 19 for
+       E2a, 37 for E2b), and the val curves swing by ±0.15 mAP between epochs.
+
+     Settling it would take repeated runs with different seeds.
+3. **Annotation choice → failure mode (round 2).** The reviewer rejected pucks *touching* a stick blade
+   (f360, f390, f630, f1230, f3810, f3870) and, in f4590, moved the box away from the
+   blade. So "puck at the blade" is labelled as "not a puck" when it is unclear.
+   - The model has to learn that boundary from very few examples. Stick blades are now the main
+     source of false positives.
+   - A rule decided as a team ("a puck touching the blade counts if ≥ 50% is visible") would make
+     these labels consistent.
+4. **Overfitting again.** Both runs reach their best val score before epoch 40, while the
+   train loss keeps falling (E2a box loss: 1.65 at epoch 20 → 0.52 at epoch 100).
+
+**Conclusion:** **E2a is the best puck model so far**, and the one the app should use.
+Doubling the reviewed frames raised precision and AP@50. Our version of hard negatives did not
+help: it gave more false positives, mainly on stick blades. The next steps for data are a
+team-wide labelling rule for pucks at the blade, and blades as explicit hard negatives. A
+repeat with 2–3 seeds would tell whether E2a vs E2b is a real difference.

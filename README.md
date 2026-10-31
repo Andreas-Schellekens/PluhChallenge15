@@ -17,8 +17,8 @@ Main clip since 2026-10-30: `Video/fillempje.mp4` (static camera behind the goal
 | Part | Status |
 |---|---|
 | Pretrained baseline (E0, E0-B) | Done: players OK, puck in only 10/2548 frames (high precision, almost no recall). See [`docs/experiments.md`](docs/experiments.md) |
-| Puck annotation (40–80 frames) | 20 human-reviewed frames (66 proposals, 20 approved); second round needed to reach 40–80. See [`docs/annotation.md`](docs/annotation.md) |
-| Puck fine-tuning + mAP@50 / mAP@50:95 | Done (E1): tile val mAP@50 0.789 / mAP@50:95 0.506; full frames recall 0/4 → 2/4, AP@50 0 → 0.75 vs baseline. See [`docs/experiments.md`](docs/experiments.md) |
+| Puck annotation (40–80 frames) | 64 human-reviewed frames: 41 with a puck + 23 verified without (2 rounds). See [`docs/annotation.md`](docs/annotation.md) |
+| Puck fine-tuning + mAP@50 / mAP@50:95 | Done (E1, E2a, E2b). Best: E2a, tile val mAP@50 0.634 / mAP@50:95 0.382; full frames recall 0/10 → 6/10 with 1 false positive, AP@50 0.01 → 0.65 vs baseline. See [`docs/experiments.md`](docs/experiments.md) |
 | Homography + rink minimap | Done (H2): lens correction + 4 keypoints, IIHF template |
 | Streamlit dashboard | Done: `streamlit run app.py`, all parameters adjustable |
 | Extra Mile (tracking / keypoints / team colours) | To choose |
@@ -34,6 +34,7 @@ scripts/
   baseline.py                E0: pretrained COCO YOLO on a clip, writes annotated video + CSV
   extract_frames.py          full-res candidate frames + contact sheet, for choosing annotation frames
   propose_puck.py            assisted labelling: background subtraction -> puck candidates + montages
+  propose_model.py           assisted labelling round 2: the fine-tuned model proposes pucks
   make_puck_dataset.py       Roboflow export -> tiled dataset with a time-based train/val split
   train_puck.py              fine-tune YOLO26 on the puck tiles
   eval_puck.py               baseline vs fine-tuned on full frames: confusion matrix, AP50, examples
@@ -115,6 +116,16 @@ python scripts/propose_puck.py --video Video/fillempje.mp4 --frames data/frames/
 
 ```bash
 python scripts/make_puck_dataset.py --export data/roboflow/<export-folder> --val-from-frame 4200 --name fillempje_tiles640
+```
+
+Round 2 (model in the loop) and the dataset with hard negatives (skates, the logo sign):
+
+```bash
+python scripts/propose_model.py --weights outputs/train/fillempje_yolo26s_puck_640/weights/best.pt --frames data/frames/fillempje --exclude data/puck_tiles/fillempje_tiles640/frames.csv --name fillempje_round2
+```
+
+```bash
+python scripts/make_puck_dataset.py --export data/roboflow/<export-folder> --val-from-frame 4200 --detections outputs/baseline/fillempje_yolo26s_1280/detections.csv --skate-crops 4 --lookalike 56 400 --name fillempje_r2_tiles640
 ```
 
 ```bash
