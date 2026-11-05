@@ -49,6 +49,7 @@ configs/
 docs/
   experiments.md             experiment log: one entry per run (config, results, conclusions)
   annotation.md              puck labelling rules, review status and split plan
+  genai.md                   how GenAI was used, what the team checked (draft, to complete)
 Video/                       input clips              (not in git; share via the team drive)
 data/                        annotated datasets       (not in git)
 outputs/                     run outputs, weights     (not in git; reproduce from the logged command)
