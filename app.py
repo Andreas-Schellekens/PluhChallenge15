@@ -26,6 +26,7 @@ import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).parent / "scripts"))
 from homography import FrameMatcher, RinkMapper  # noqa: E402
+from kalman import PuckKalman  # noqa: E402
 from pipeline import Settings, draw, process_frame  # noqa: E402
 from rink import Minimap  # noqa: E402
 
@@ -36,6 +37,12 @@ st.set_page_config(page_title="Hockey Vision", layout="wide")
 # ---------- cached resources ----------
 @st.cache_resource
 def load_yolo(path):
+    from ultralytics import YOLO
+    return YOLO(path)
+
+
+def YOLO_fresh(path):
+    """Uncached model: the tracker state lives on the model object, so a new clip needs a new one."""
     from ultralytics import YOLO
     return YOLO(path)
 
@@ -119,6 +126,19 @@ drift = sb.radio("Camera motion", ["static", "SIFT to reference"], index=0 if "f
                  help="Handheld clips need per-frame matching to the reference frame")
 s.show_template = sb.checkbox("Draw rink template on the video", True)
 
+sb.header("Tracking (Clip tab)")
+s.track = sb.checkbox("Track players + puck", True,
+                      help="ByteTrack IDs for players, Kalman filter for the puck. Needs consecutive frames, "
+                           "so it only applies in the Clip tab.")
+kal_params = {}
+if s.track:
+    kal_params["accel_std"] = sb.slider("Puck acceleration noise (m/s²)", 5.0, 60.0, 20.0, 5.0,
+                                        help="How hard the puck may change speed. Higher = follows sudden shots, but noisier")
+    kal_params["meas_std"] = sb.slider("Detection noise (m)", 0.2, 2.0, 0.7, 0.1,
+                                       help="How much we trust one detection after the homography")
+    kal_params["max_coast"] = sb.slider("Max time without detection (s)", 0.0, 1.5, 0.5, 0.1,
+                                        help="How long the filter keeps predicting a hidden puck")
+
 mapper = RinkMapper(cfg_live)
 minimap = Minimap(mapper.spec, width_px=900)
 person_model = load_yolo("yolo26s.pt")
@@ -132,7 +152,7 @@ def h_to_ref(frame):
     return H if H is not None and inliers >= 80 else None
 
 
-tab_frame, tab_clip, tab_eval, tab_hom = st.tabs(["Frame", "Clip", "Puck model", "Homography"])
+tab_frame, tab_clip, tab_track, tab_eval, tab_hom = st.tabs(["Frame", "Clip", "Tracking", "Puck model", "Homography"])
 
 # ---------- Frame ----------
 with tab_frame:
@@ -143,8 +163,9 @@ with tab_frame:
         st.warning("Could not read this frame.")
     else:
         H = h_to_ref(frame)
-        res = process_frame(frame, person_model, puck_model, mapper, s, H)
-        view, mm = draw(frame, res, mapper, minimap, s, H)
+        s_frame = Settings(**{**s.__dict__, "track": False})  # one frame: nothing to track
+        res = process_frame(frame, person_model, puck_model, mapper, s_frame, H)
+        view, mm = draw(frame, res, mapper, minimap, s_frame, H)
         c1, c2 = st.columns([3, 2])
         c1.image(rgb(view), caption=f"frame {idx}", width="stretch")
         c2.image(rgb(mm), caption="tactical minimap", width="stretch")
@@ -171,6 +192,9 @@ with tab_clip:
         cap = cv2.VideoCapture(str(ROOT / video))
         cap.set(cv2.CAP_PROP_POS_FRAMES, first)
         writer, rows = None, []
+        # tracking keeps state between frames, so every clip run starts with a fresh tracker and filter
+        clip_person_model = YOLO_fresh("yolo26s.pt") if s.track else person_model
+        kf = PuckKalman(**kal_params) if s.track else None
         bar = st.progress(0.0)
         for i in range(first, last):
             if not cap.grab():
@@ -179,7 +203,12 @@ with tab_clip:
                 continue
             frame = cap.retrieve()[1]
             H = h_to_ref(frame)
-            res = process_frame(frame, person_model, puck_model, mapper, s, H)
+            res = process_frame(frame, clip_person_model, puck_model, mapper, s, H)
+            if kf is not None:
+                x, y, state, _ = kf.step(stride / info["fps"], res.extra["puck_candidates"])
+                res.extra["kalman"] = (x, y, state)
+                res.puck_rink = np.array([[x, y]]) if x is not None else np.zeros((0, 2))
+                res.puck_conf = np.array([1.0 if state != "predicted" else 0.0]) if x is not None else np.zeros(0)
             view, mm = draw(frame, res, mapper, minimap, s, H)
             mm = cv2.resize(mm, (view.shape[1], round(mm.shape[0] * view.shape[1] / mm.shape[1])))
             canvas = np.vstack([view, mm])
@@ -190,12 +219,14 @@ with tab_clip:
                                                      macro_block_size=1, quality=7)
                 writer.send(None)
             writer.send(np.ascontiguousarray(rgb(canvas)))
-            for xy, c, ice in zip(res.person_rink, res.person_conf, res.on_ice):
-                rows.append({"frame": i, "time_s": round(i / info["fps"], 3), "type": "person",
+            ids = res.extra.get("ids", [-1] * len(res.person_rink))
+            for xy, c, ice, tid in zip(res.person_rink, res.person_conf, res.on_ice, ids):
+                rows.append({"frame": i, "time_s": round(i / info["fps"], 3), "type": "person", "id": int(tid),
                              "x": round(xy[0], 2), "y": round(xy[1], 2), "conf": round(float(c), 3), "on_ice": ice})
             for xy, c in zip(res.puck_rink, res.puck_conf):
-                rows.append({"frame": i, "time_s": round(i / info["fps"], 3), "type": "puck",
-                             "x": round(xy[0], 2), "y": round(xy[1], 2), "conf": round(float(c), 3), "on_ice": True})
+                rows.append({"frame": i, "time_s": round(i / info["fps"], 3), "type": "puck", "id": -1,
+                             "x": round(xy[0], 2), "y": round(xy[1], 2), "conf": round(float(c), 3), "on_ice": True,
+                             "state": res.extra.get("kalman", (0, 0, "detected"))[2]})
             bar.progress((i - first + 1) / max(1, last - first))
         cap.release()
         if writer is not None:
@@ -210,6 +241,28 @@ with tab_clip:
         c1.metric("Players on ice per frame", f"{(df[df['type'] == 'person']['on_ice']).sum() / max(n, 1):.1f}")
         c2.metric("Frames with puck", f"{pk['frame'].nunique()} / {n}")
         st.download_button("Download positions CSV", df.to_csv(index=False), "positions.csv", "text/csv")
+
+# ---------- Tracking ----------
+with tab_track:
+    runs_t = sorted((ROOT / "outputs/track").glob("*/summary.json"))
+    if not runs_t:
+        st.info("No tracking run yet. Run scripts/track.py (see docs/experiments.md, T1).")
+    else:
+        run_t = st.selectbox("Tracking run (whole clip)", runs_t, format_func=lambda p: p.parent.name)
+        sm = json.loads(run_t.read_text())
+        pk, pl = sm["puck"], sm["players"]
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Puck on the minimap", f"{pk['frames_shown_after_kalman_pct']}% of frames",
+                  f"+{pk['frames_shown_after_kalman_pct'] - pk['frames_with_detection_on_ice_pct']:.1f} pts vs detections only")
+        c2.metric("Impossible puck jumps", pk["impossible_jumps_kalman"], f"{pk['impossible_jumps_kalman'] - pk['impossible_jumps_raw']} vs raw",
+                  delta_color="inverse")
+        c3.metric("Player IDs (on ice)", pl["unique_ids_on_ice"], f"median life {pl['median_track_life_s']} s",
+                  delta_color="off")
+        st.subheader("Gap test: hide detections, compare the prediction with what was hidden")
+        st.dataframe(pd.DataFrame(sm["gap_test"]), width="stretch")
+        if (run_t.parent / "minimap_compare.mp4").exists():
+            st.video(str(run_t.parent / "minimap_compare.mp4"))
+        st.caption(f"Kalman settings of this run: {sm['kalman_params']}")
 
 # ---------- Puck model ----------
 with tab_eval:

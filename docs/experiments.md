@@ -386,3 +386,84 @@ Doubling the reviewed frames raised precision and AP@50. Our version of hard neg
 help: it gave more false positives, mainly on stick blades. The next steps for data are a
 team-wide labelling rule for pucks at the blade, and blades as explicit hard negatives. A
 repeat with 2–3 seeds would tell whether E2a vs E2b is a real difference.
+
+## T1 – Tracking (Extra Mile): ByteTrack for players, Kalman filter for the puck, 2026-11-05
+
+**Why.** Until now every frame was processed on its own. Players had no identity over time,
+and the puck (detected in only ~18% of the frames, E2a) blinked on the minimap or jumped to a
+false detection.
+
+**Method**
+- **Players: ByteTrack** (Ultralytics `model.track`, `persist=True`).
+  - Each track is predicted with a Kalman filter in the image, and new boxes are matched to the
+    predictions by IoU.
+  - The "byte" idea: low-confidence boxes (≥ 0.1) are used in a second matching round, so a
+    partly hidden player keeps their track. That is why the person confidence is set low (0.1)
+    for tracking.
+- **Puck: our own Kalman filter** (`scripts/kalman.py`), running on the rink in metres after
+  the homography.
+  - State: position and velocity, with a constant-velocity model.
+  - Process noise: white-noise acceleration, σ_a = 20 m/s². Measurement noise: σ = 0.7 m.
+  - Gating: Mahalanobis d² < 9.21 (χ², 2 degrees of freedom, 99%), then nearest neighbour inside
+    the gate.
+  - At most 0.5 s of prediction without a detection. A new track needs a detection with conf ≥ 0.4.
+  - Puck candidates outside the rink are dropped first.
+- **Gap test.** Detections that the full run used are hidden in blocks of k frames. We then
+  compare the filter's position with the hidden detection. Baseline: keep the puck at its
+  last seen position.
+
+Commands (RTX 4060 Laptop, every 2nd frame, about 5 min per run):
+```
+python scripts/track.py --video Video/fillempje.mp4 --keypoints configs/keypoints_fillempje.json --puck-weights outputs/train/fillempje_v3_yolo26s_puck_640/weights/best.pt --name fillempje_E2a
+python scripts/track.py ... --tracker configs/bytetrack_hockey.yaml --name fillempje_E2a_hockeytrack
+```
+
+**Results: puck** (2548 processed frames; the two runs give the same puck numbers)
+
+| | before (detections only) | after (Kalman) |
+|---|---|---|
+| frames with a puck on the minimap | 17.2% (on the ice) | **39.6%** (13.8% measured + 25.8% predicted) |
+| impossible jumps (> 40 m/s between two processed frames) | 26 | **13** (left over: new tracks starting elsewhere) |
+| frames where the gate refused a detection | – | 64 |
+
+Gap test (median error against the hidden detection):
+
+| gap | puck still shown | Kalman error | "last position" error |
+|---|---|---|---|
+| 0.10 s | 92% | **0.10 m** | 0.44 m |
+| 0.27 s | 84% | **0.30 m** | 1.03 m |
+| 0.50 s | 64% | **0.78 m** | 1.21 m |
+
+**Results: players** (on-ice tracks only)
+
+| tracker settings | unique IDs | IDs longer than 5 s | median track life |
+|---|---|---|---|
+| Ultralytics default (`track_buffer` 30, `new_track_thresh` 0.25, `match_thresh` 0.8) | 370 | 77 | 1.45 s |
+| **`configs/bytetrack_hockey.yaml`** (buffer 90 = 3 s, new track ≥ 0.4, match 0.9) | **221** | 82 | **3.94 s** |
+
+There are about 12 people on the ice at any moment, so the ideal is around 12–20 IDs over
+the whole clip.
+
+**Observations**
+1. **The puck filter does what it should.** Puck coverage on the minimap more than doubles. For
+   short gaps, the prediction is 3–4× more accurate than freezing the puck.
+   - The gate removes half of the impossible jumps.
+   - At 0.5 s the advantage shrinks (0.78 vs 1.21 m): a puck changes direction (pass, rebound,
+     boards) while it is hidden, and a constant-velocity model cannot know that.
+2. **Player tracking is still fragmented.** Even tuned, there are 221 IDs instead of about 15.
+   - Causes:
+     - players cross and hide each other for longer than 3 s at the boards and in front of the net;
+     - far-away players are small boxes, so their IoU drops quickly when they move;
+     - the team kits look the same, so matching on position alone cannot tell players apart after
+       a long occlusion. ByteTrack uses no appearance; BoT-SORT with ReID would, but within a team
+       it would not help much either.
+   - The ID count is a proxy. Without hand-labelled IDs we cannot count ID switches exactly.
+3. **Limitation of the gap test.** The "truth" is our own detection, which carries
+   homography noise of about 0.5–1 m far away. So errors below about 0.3 m say little.
+
+**Conclusion:** the Kalman filter fills most puck gaps up to about 0.3 s accurately and removes
+false jumps. For the minimap it is the most visible improvement since E2a. Player IDs became
+2.7× more stable after tuning, but identity is not kept over long occlusions; that would need
+appearance features (team colour plus jersey number). The app's Clip tab now tracks by default
+(sidebar: Kalman settings), and the Tracking tab shows these results with the before/after
+minimap video.

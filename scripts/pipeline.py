@@ -38,6 +38,8 @@ class Settings:
     rink_margin: float = 1.0       # rink units outside the boards still counted as on the ice
     show_template: bool = True
     show_off_ice: bool = False
+    track: bool = False            # ByteTrack IDs for players (needs consecutive frames: Clip tab only)
+    tracker: str = "configs/bytetrack_hockey.yaml"
 
 
 @dataclass
@@ -58,7 +60,13 @@ def bottom_centres(boxes):
 
 
 def process_frame(frame, person_model, puck_model, mapper: RinkMapper, s: Settings, H_to_ref=None):
-    r = person_model.predict(frame, imgsz=s.person_imgsz, conf=s.person_conf, classes=[PERSON], verbose=False)[0]
+    extra = {}
+    if s.track:  # persist=True: the tracker keeps its state between calls, so call it on consecutive frames
+        r = person_model.track(frame, persist=True, tracker=s.tracker, imgsz=s.person_imgsz, conf=s.person_conf,
+                               classes=[PERSON], verbose=False)[0]
+        extra["ids"] = r.boxes.id.cpu().numpy().astype(int) if r.boxes.id is not None else np.full(len(r.boxes), -1)
+    else:
+        r = person_model.predict(frame, imgsz=s.person_imgsz, conf=s.person_conf, classes=[PERSON], verbose=False)[0]
     persons, pconf = r.boxes.xyxy.cpu().numpy(), r.boxes.conf.cpu().numpy()
 
     if s.puck_mode == "finetuned" and puck_model is not None:
@@ -68,6 +76,13 @@ def process_frame(frame, person_model, puck_model, mapper: RinkMapper, s: Settin
         pucks, kconf = rb.boxes.xyxy.cpu().numpy(), rb.boxes.conf.cpu().numpy()
     else:
         pucks, kconf = np.zeros((0, 4)), np.zeros(0)
+    # all on-ice candidates, for the Kalman filter (it picks the one that fits its prediction)
+    if len(pucks):
+        cand = mapper.image_to_rink(bottom_centres(pucks), H_to_ref)
+        extra["puck_candidates"] = [(x, y, c) for (x, y), c, ice in
+                                    zip(cand, kconf, mapper.on_ice(cand, s.rink_margin)) if ice]
+    else:
+        extra["puck_candidates"] = []
     if len(pucks) > 1:  # there is only one puck: keep the most confident detection
         best = int(np.argmax(kconf))
         pucks, kconf = pucks[best:best + 1], kconf[best:best + 1]
@@ -75,7 +90,7 @@ def process_frame(frame, person_model, puck_model, mapper: RinkMapper, s: Settin
     person_rink = mapper.image_to_rink(bottom_centres(persons), H_to_ref) if len(persons) else np.zeros((0, 2))
     puck_rink = mapper.image_to_rink(bottom_centres(pucks), H_to_ref) if len(pucks) else np.zeros((0, 2))
     on_ice = mapper.on_ice(person_rink, s.rink_margin)
-    return FrameResult(persons, pconf, person_rink, on_ice, pucks, kconf, puck_rink)
+    return FrameResult(persons, pconf, person_rink, on_ice, pucks, kconf, puck_rink, extra)
 
 
 def draw(frame, res: FrameResult, mapper: RinkMapper, minimap: Minimap, s: Settings, H_to_ref=None, out_width=1280):
@@ -86,15 +101,32 @@ def draw(frame, res: FrameResult, mapper: RinkMapper, minimap: Minimap, s: Setti
         mapper.draw_template(view, H_to_ref, scale=scale, thickness=1)
     mm = minimap.background.copy()
 
-    for box, c, xy, ice in zip(res.persons, res.person_conf, res.person_rink, res.on_ice):
+    ids = res.extra.get("ids", [-1] * len(res.persons))
+    for box, c, xy, ice, tid in zip(res.persons, res.person_conf, res.person_rink, res.on_ice, ids):
         if not ice and not s.show_off_ice:
             continue
         col = PLAYER_COL if ice else OFF_ICE_COL
         x1, y1, x2, y2 = (box * scale).astype(int)
         cv2.rectangle(view, (x1, y1), (x2, y2), col, 2)
         cv2.circle(view, ((x1 + x2) // 2, y2), 4, col, -1)
+        if tid >= 0:
+            cv2.putText(view, str(tid), (x1, y1 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.5, col, 2)
         if ice:
-            cv2.circle(mm, tuple(int(v) for v in minimap.to_px(xy)[0]), 7, PLAYER_COL, -1, cv2.LINE_AA)
+            p = tuple(int(v) for v in minimap.to_px(xy)[0])
+            cv2.circle(mm, p, 7, PLAYER_COL, -1, cv2.LINE_AA)
+            if tid >= 0:
+                cv2.putText(mm, str(tid), (p[0] + 8, p[1] - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (30, 30, 30), 1)
+
+    kal = res.extra.get("kalman")  # (x, y, state) from kalman.PuckKalman, set by the app
+    if kal is not None:
+        if kal[0] is not None:  # filtered puck: filled = measured, ring = predicted while hidden
+            p = tuple(int(v) for v in minimap.to_px(kal[:2])[0])
+            cv2.circle(mm, p, 6 if kal[2] != "predicted" else 9, PUCK_COL, -1 if kal[2] != "predicted" else 2, cv2.LINE_AA)
+            img_pt, ok = mapper.rink_to_image(np.array([kal[:2]], float), H_to_ref)
+            if ok[0]:
+                u, v = img_pt[0]
+                cv2.circle(view, (int(u * scale), int(v * scale)), 14, (0, 0, 255), 2 if kal[2] != "predicted" else 1)
+        return view, mm
 
     for box, c, xy in zip(res.pucks, res.puck_conf, res.puck_rink):
         x1, y1, x2, y2 = (box * scale).astype(int)

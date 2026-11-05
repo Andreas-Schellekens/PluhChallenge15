@@ -1,0 +1,14 @@
+# ByteTrack settings tuned for hockey (experiment T1, see docs/experiments.md).
+# Differences from the Ultralytics default (bytetrack.yaml):
+#   track_buffer 30 -> 90       keep a lost player for 3 s (at 30 processed fps): players
+#                               disappear behind each other or the net for longer than 1 s
+#   new_track_thresh 0.25 -> 0.4  a weak box does not start a new ID: fewer short, spurious tracks
+#   match_thresh 0.8 -> 0.9     allow a looser IoU match: fast skaters move far between two
+#                               processed frames (we process every 2nd frame)
+tracker_type: bytetrack
+track_high_thresh: 0.25
+track_low_thresh: 0.1
+new_track_thresh: 0.4
+track_buffer: 90
+match_thresh: 0.9
+fuse_score: True

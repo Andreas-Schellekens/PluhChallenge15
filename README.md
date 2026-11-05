@@ -21,7 +21,7 @@ Main clip since 2026-10-30: `Video/fillempje.mp4` (static camera behind the goal
 | Puck fine-tuning + mAP@50 / mAP@50:95 | Done (E1, E2a, E2b). Best: E2a, tile val mAP@50 0.634 / mAP@50:95 0.382; full frames recall 0/10 → 6/10 with 1 false positive, AP@50 0.01 → 0.65 vs baseline. See [`docs/experiments.md`](docs/experiments.md) |
 | Homography + rink minimap | Done (H2): lens correction + 4 keypoints, IIHF template |
 | Streamlit dashboard | Done: `streamlit run app.py`, all parameters adjustable |
-| Extra Mile (tracking / keypoints / team colours) | To choose |
+| Extra Mile: tracking (T1) | Done: ByteTrack player IDs + Kalman filter for the puck (puck on the minimap in 17% → 40% of frames). `scripts/track.py`, app tab Tracking |
 
 ## Repository layout
 
@@ -35,6 +35,8 @@ scripts/
   extract_frames.py          full-res candidate frames + contact sheet, for choosing annotation frames
   propose_puck.py            assisted labelling: background subtraction -> puck candidates + montages
   propose_model.py           assisted labelling round 2: the fine-tuned model proposes pucks
+  kalman.py                  Kalman filter for the puck on the rink (predict / gate / update)
+  track.py                   tracking over the clip: ByteTrack players + Kalman puck, gap test
   make_puck_dataset.py       Roboflow export -> tiled dataset with a time-based train/val split
   train_puck.py              fine-tune YOLO26 on the puck tiles
   eval_puck.py               baseline vs fine-tuned on full frames: confusion matrix, AP50, examples

@@ -6,3 +6,4 @@ opencv-python>=4.10
 streamlit>=1.40
 pandas>=2.0
 imageio-ffmpeg>=0.5
+lap>=0.5.12           # needed by the ByteTrack tracker (Ultralytics model.track)
