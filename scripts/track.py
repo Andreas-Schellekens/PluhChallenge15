@@ -20,7 +20,8 @@ Two phases, so the filter can be tuned without running the detectors again:
 Gap test: how good is the prediction while the puck is hidden? We take frames where the
 puck WAS detected, hide those detections in blocks of k frames, and compare the filter's
 prediction with the hidden detection (in metres). Baseline: keep the puck at its last
-seen position. This measures exactly what the filter adds.
+seen position. Both are scored on the same frames (where the filter still shows a puck),
+so the difference is exactly what the velocity model adds.
 
 Outputs (outputs/track/<name>/, ignored by git):
   players.csv, puck_raw.csv, puck_track.csv, summary.json, minimap_compare.mp4
@@ -63,6 +64,8 @@ def parse_args():
     # Kalman parameters (see kalman.py)
     p.add_argument("--accel-std", type=float, default=20.0)
     p.add_argument("--meas-std", type=float, default=0.7)
+    p.add_argument("--puck-px-std", type=float, default=0.0,
+                   help="pixel noise of a puck detection, projected onto the rink per detection (0 = off)")
     p.add_argument("--max-coast", type=float, default=0.5)
     p.add_argument("--init-conf", type=float, default=0.4)
     p.add_argument("--no-video", action="store_true", help="skip the minimap video")
@@ -87,9 +90,13 @@ def detect(args, mapper, out):
             xyxy, ids = b.xyxy.cpu().numpy(), (b.id.cpu().numpy().astype(int) if b.id is not None else [-1] * len(b))
             feet = np.stack([(xyxy[:, 0] + xyxy[:, 2]) / 2, xyxy[:, 3]], axis=1)
             rink = mapper.image_to_rink(feet)
-            for (u, v), (x, y), c, tid, ice in zip(feet, rink, b.conf.cpu().numpy(), ids, mapper.on_ice(rink, args.rink_margin)):
+            for box, (u, v), (x, y), c, tid, ice in zip(xyxy, feet, rink, b.conf.cpu().numpy(), ids,
+                                                        mapper.on_ice(rink, args.rink_margin)):
+                # the box itself is kept too: scripts/teams.py cuts the jersey out of it
                 players.append({"frame": i, "id": int(tid), "conf": round(float(c), 3), "u": round(u, 1), "v": round(v, 1),
-                                "x": round(x, 2), "y": round(y, 2), "on_ice": ice})
+                                "x": round(x, 2), "y": round(y, 2), "on_ice": ice,
+                                "x1": round(float(box[0]), 1), "y1": round(float(box[1]), 1),
+                                "x2": round(float(box[2]), 1), "y2": round(float(box[3]), 1)})
         boxes, conf = predict_tiled(puck_model, frame, 640, 160, args.puck_conf)
         if len(boxes):
             bottom = np.stack([(boxes[:, 0] + boxes[:, 2]) / 2, boxes[:, 3]], axis=1)
@@ -105,29 +112,38 @@ def detect(args, mapper, out):
     return i + 1
 
 
-def dets_by_frame(raw):
-    return {f: list(zip(g.x, g.y, g.conf)) for f, g in raw.groupby("frame")}
+def dets_by_frame(raw, mapper, px_std):
+    """frame -> list of (x, y, conf, R): every puck candidate with the rink covariance of its
+    pixel noise (px_std pixels, see RinkMapper.rink_noise). px_std = 0 gives the old behaviour:
+    the same fixed noise everywhere on the rink."""
+    out = {}
+    for f, g in raw.groupby("frame"):
+        covs = mapper.rink_noise(g[["u", "v"]].to_numpy(), px_std)
+        out[f] = list(zip(g.x, g.y, g.conf, covs))
+    return out
 
 
-def gap_test(frames, dets, ref, dt, stride, params, k):
+def gap_test(frames, dets, ref, dt, stride, params, k, inside):
     """Hide detections in blocks of k processed frames (every 3rd block) and compare the
     filter's position with the hidden detection that the full run used."""
     hidden = {f for j, f in enumerate(frames) if (j // k) % 3 == 1}
-    rows = run_kalman(frames, {f: d for f, d in dets.items() if f not in hidden}, dt, **params)
-    errs, hold_errs, shown, last = [], [], 0, None
+    rows = run_kalman(frames, {f: d for f, d in dets.items() if f not in hidden}, dt, inside=inside, **params)
+    errs, hold_errs, waits, last, last_f = [], [], [], None, None
     for r in rows:
         f = r["frame"]
         if r["state"] in ("measured", "started"):
-            last = (r["x"], r["y"])
-        if f in hidden and f in ref:  # the full run measured the puck here
-            if r["x"] is not None:
-                shown += 1
-                errs.append(np.hypot(r["x"] - ref[f][0], r["y"] - ref[f][1]))
-            if last is not None:
-                hold_errs.append(np.hypot(last[0] - ref[f][0], last[1] - ref[f][1]))
+            last, last_f = (r["x"], r["y"]), f
+        # Both methods are scored on the SAME frames: hidden frames where the full run used a
+        # detection AND the filter is still showing a puck. (Scoring "hold last" on every hidden
+        # frame, also the ones where the filter had already given up, made it look worse.)
+        if f in hidden and f in ref and r["x"] is not None and last is not None:
+            errs.append(np.hypot(r["x"] - ref[f][0], r["y"] - ref[f][1]))
+            hold_errs.append(np.hypot(last[0] - ref[f][0], last[1] - ref[f][1]))
+            waits.append((f - last_f) * dt)
     n = sum(1 for f in hidden if f in ref)
-    return {"gap_frames": k, "gap_s": round(k * stride * dt, 2), "hidden_detections": n,
-            "still_shown_pct": round(100 * shown / max(n, 1), 1),
+    return {"block_frames": k, "block_s": round(k * stride * dt, 2), "hidden_detections": n,
+            "still_shown_pct": round(100 * len(errs) / max(n, 1), 1),
+            "median_time_since_last_seen_s": round(float(np.median(waits)), 2) if waits else None,
             "kalman_median_err_m": round(float(np.median(errs)), 2) if errs else None,
             "hold_last_median_err_m": round(float(np.median(hold_errs)), 2) if hold_errs else None}
 
@@ -194,8 +210,10 @@ def main():
     params = dict(accel_std=args.accel_std, meas_std=args.meas_std, max_coast=args.max_coast, init_conf=args.init_conf)
 
     raw_ice = raw[raw.on_ice]
-    dets = dets_by_frame(raw_ice)
-    track = pd.DataFrame(run_kalman(frames, dets, dt, **params))
+    dets = dets_by_frame(raw_ice, mapper, args.puck_px_std)
+    def inside(x, y):  # the puck cannot be behind the boards
+        return mapper.on_ice([(x, y)], args.rink_margin)[0]
+    track = pd.DataFrame(run_kalman(frames, dets, dt, inside=inside, **params))
     track.to_csv(out / "puck_track.csv", index=False)
 
     # impossible jumps: the shown puck moves faster than 40 m/s between two processed frames
@@ -204,8 +222,20 @@ def main():
         d = np.hypot(np.diff(xy.x), np.diff(xy.y))
         gap = np.diff(xy.index) * dt
         return int(np.sum(d > 40.0 * gap))
+
+    def jumps_within(tr):
+        t = tr.dropna(subset=["x"])
+        d = np.hypot(np.diff(t.x), np.diff(t.y))
+        gap = np.diff(t.frame) * dt
+        return int(np.sum((d > 40.0 * gap) & (t.state.to_numpy()[1:] != "started")))
     best_raw = raw_ice.sort_values("conf").groupby("frame").last()[["x", "y"]].reindex(frames)
-    ref = {r.frame: (r.x, r.y) for r in track.itertuples() if r.state == "measured"}
+    # Reference for the gap test: the raw DETECTION the full run used in each measured frame
+    # (the candidate closest to the filtered position), not the filtered position itself.
+    # Otherwise the filter would be compared with its own output.
+    ref = {}
+    for r in track.itertuples():
+        if r.state == "measured":
+            ref[r.frame] = min(((d[0], d[1]) for d in dets[r.frame]), key=lambda d: np.hypot(d[0] - r.x, d[1] - r.y))
 
     ice_players = players[players.on_ice & (players.id >= 0)]
     life = ice_players.groupby("id").frame.agg(lambda s: (s.max() - s.min()) * dt)
@@ -230,9 +260,12 @@ def main():
             "frames_detection_rejected_by_gate": int(((track.n_dets > 0) & (track.state == "predicted")).sum()),
             "impossible_jumps_raw": jumps(best_raw),
             "impossible_jumps_kalman": jumps(track.set_index("frame")[["x", "y"]]),
+            # the same count without the jumps that are a NEW track starting somewhere else
+            # (after the puck was lost): what is left are jumps inside one track
+            "impossible_jumps_kalman_within_track": jumps_within(track),
         },
-        "kalman_params": params,
-        "gap_test": [gap_test(frames, dets, ref, dt, args.stride, params, k) for k in (3, 8, 15)],
+        "kalman_params": {**params, "puck_px_std": args.puck_px_std},
+        "gap_test": [gap_test(frames, dets, ref, dt, args.stride, params, k, inside) for k in (3, 8, 15)],
     }
     (out / "summary.json").write_text(json.dumps(summary, indent=2))
     print(json.dumps(summary, indent=2))

@@ -24,7 +24,7 @@ whether a puck was found. Most of these frames have no label, so this is a
 visual check, not a score.
 
 Outputs (in outputs/eval_puck/<name>/, ignored by git):
-  metrics.json           TP/FP/FN, precision, recall, AP@50 per model
+  metrics.json           TP/FP/FN, precision, recall, AP@50 per model, and the hits per frame
   confusion_matrix.png   both 2x2 matrices side by side
   comparison.jpg         per frame: zoom on the true puck (baseline | finetuned)
                          and the full frame with all finetuned detections
@@ -187,7 +187,7 @@ def main():
     frames = pd.read_csv(args.frames)
     frames = frames[frames["split"] == args.split]
     collected = {n: {"scores": [], "tp": [], "TP": 0, "FP": 0, "FN": 0} for n in models}
-    n_gt, rows = 0, []
+    n_gt, rows, per_frame = 0, [], []
     for _, fr in frames.iterrows():
         img = cv2.imread(fr["image"])
         gts = load_gt(fr["image"], img.shape[1], img.shape[0])
@@ -205,6 +205,8 @@ def main():
             collected[name]["FP"] += int((~tp_c).sum())
             collected[name]["FN"] += len(gts) - int(tp_c.sum())
             preds_at_conf[name] = (boxes[keep], scores[keep])
+            per_frame.append({"frame": int(fr["frame"]), "model": name, "pucks": len(gts),
+                              "TP": int(tp_c.sum()), "FP": int((~tp_c).sum())})
             print(f"f{fr['frame']} {name:9s}: {keep.sum()} detections >= {args.conf}, {int(tp_c.sum())}/{len(gts)} pucks found")
 
         # visual: zoom on the true puck for both models + full frame with all finetuned detections
@@ -234,7 +236,8 @@ def main():
     plot_confusion(results, out_dir / "confusion_matrix.png")
     summary = {"split": args.split, "frames": frames["frame"].tolist(), "pucks": n_gt, "conf": args.conf,
                "iou_match": 0.5, "baseline": args.baseline, "baseline_imgsz": args.baseline_imgsz,
-               "finetuned": args.finetuned, "tile": args.tile, "overlap": args.overlap, "results": results}
+               "finetuned": args.finetuned, "tile": args.tile, "overlap": args.overlap, "results": results,
+               "per_frame": per_frame}  # which frame gave which hit or false alarm, for the error analysis
 
     if args.video:
         cap = cv2.VideoCapture(args.video)

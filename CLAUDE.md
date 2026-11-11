@@ -10,7 +10,7 @@ Pipeline: `.mp4` clip → object detection (players/referees + fine-tuned small 
 
 Scope: planar sports only (soccer, basketball, tennis, ice/field hockey), single static camera angle.
 
-**Our choice: ice hockey.** Main clip (since 2026-10-30): `Video/fillempje.mp4` (1920×1080, 59.94 fps, ~85 s, amateur game, static wide-angle action camera behind the near goal). The data gap is the **puck**: about 6–10 px, found by COCO YOLO in only 10/2548 frames (E0-B). Players and referees use pretrained COCO `person`. The homography needs lens correction (k1) and an IIHF rink template in metres (H2). The first clip `Video/hockey_clip_4k_noaudio.mp4` (4K, handheld) is kept as experiment history (E0, H1).
+**Our choice: ice hockey.** Main clip (since 2026-10-30): `Video/fillempje.mp4` (1920×1080, 59.94 fps, ~85 s, amateur game, static wide-angle action camera behind the near goal). The data gap is the **puck**: about 6–10 px, found by COCO YOLO in only 10/2548 frames (E0-B). Players and referees use pretrained COCO `person`. The homography needs lens correction (k1) and an IIHF rink template in metres; it uses 6 keypoints fitted in pixels (H3) and is only coarse (several metres) beyond the centre line. The first clip `Video/hockey_clip_4k_noaudio.mp4` (4K, handheld) is kept as experiment history (E0, H1).
 
 ## Repository layout
 
@@ -18,6 +18,21 @@ Scope: planar sports only (soccer, basketball, tennis, ice/field hockey), single
 - `docs/experiments.md`: experiment log. Every run gets an entry (E0, E1, ...) with the command, config, results table, observations and conclusions.
 - `Video/`, `data/`, `outputs/`: local only, ignored by git.
 - Environment: `.venv` (Python 3.12) with CUDA PyTorch installed before `requirements.txt`.
+
+## Status (2026-11-11) and open points
+
+Done and logged: baseline (E0, E0-B), 64 reviewed frames in two rounds, fine-tuning (E1, E2a, E2b; best = E2a), seed study (S1: the E2a recipe gives mAP@50 0.56 ± 0.06 over 3 seeds, the logged 0.634 is the best run; hard negatives do not help), homography (H3), Streamlit app, and two Extra Mile tracks: tracking (T1/T2) and team colours + heatmaps (TM1). The audit of 2026-11-11 (A1 in the log) lists what was wrong and what was changed.
+
+Experiment IDs: E = puck detector, H = homography, T = tracking, TM = teams, S = seed study, A = audit.
+
+Open, and to be done by the team (not by an AI):
+- Decide the labelling rule for a puck touching the stick blade, then relabel and retrain. It is the main false positive of every model.
+- Consistency check: a second person labels the same 10 frames; compare with IoU (`docs/annotation.md`).
+- A test set chosen without any model (the val set was partly built with E1, see A1).
+- A team member confirms the visual checks that Claude Code did (clip samples in E1/E2, the 110-crop team sample in TM1).
+- Complete `docs/genai.md`: own contributions and the statement.
+
+Gotcha: `data/puck_tiles/*/data.yaml` holds an absolute path; fix the `path:` line after moving the project.
 
 ## MVP requirements
 
@@ -39,6 +54,8 @@ Engineering methodology and conceptual depth matter far more than dashboard poli
 - **Explain, don't just generate.** Every team member must be able to defend the code live in an oral exam without AI help. Keep code readable and explain non-obvious choices (architecture, losses, augmentations, homography math) when introducing them.
 - **Log experiments.** Each training run should record its config, augmentations, and mAP@50 / mAP@50:95 so results are reproducible and comparable. Prefer config files and saved run outputs over ad-hoc notebook state.
 - **Prefer simple, transparent code** over heavy boilerplate or copied pipelines.
+- **Correct the log, don't rewrite it.** When a logged result turns out wrong, add a dated note at the old entry and a new entry with the corrected numbers (as in A1/T2). The graders look at the process.
+- **Mark who checked what.** A visual check by Claude is not ground truth; say so in the log until a team member has confirmed it.
 - **Never commit large artifacts**: raw videos, datasets, model weights and training runs stay out of git (see `.gitignore`).
 - GenAI use must be documented per the course GenAI policy.
 

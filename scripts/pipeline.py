@@ -7,6 +7,8 @@ we measured:
   puck      our fine-tuned model with tiled inference (eval_puck.predict_tiled),
             or the COCO "sports ball" class as the baseline to compare against
   mapping   homography.RinkMapper (lens correction + homography, H1)
+  teams     optional: the jersey colour of each person is matched to the K-means
+            centres that teams.py fitted (TM1), so the dots get their team colour
 
 A detection is placed on the rink by its bottom-centre point: the feet of a
 player, the bottom of the puck box. Only points on the ice plane obey the
@@ -21,6 +23,7 @@ import numpy as np
 from eval_puck import SPORTS_BALL, predict_tiled
 from homography import RinkMapper
 from rink import Minimap
+from teams import TrackVote, jersey_colour, nearest_centre  # noqa: F401 (TrackVote is re-exported for app.py)
 
 PERSON = 0
 PLAYER_COL, OFF_ICE_COL, PUCK_COL = (0, 140, 255), (160, 160, 160), (0, 0, 0)  # BGR
@@ -40,6 +43,9 @@ class Settings:
     show_off_ice: bool = False
     track: bool = False            # ByteTrack IDs for players (needs consecutive frames: Clip tab only)
     tracker: str = "configs/bytetrack_hockey.yaml"
+    team_centres: object = None    # k x 3 Lab cluster centres from teams.py (None = one colour for everyone)
+    team_scale: object = 1.0       # feature scale that belongs to those centres
+    team_colours: object = None    # k BGR colours to draw them with
 
 
 @dataclass
@@ -68,6 +74,9 @@ def process_frame(frame, person_model, puck_model, mapper: RinkMapper, s: Settin
     else:
         r = person_model.predict(frame, imgsz=s.person_imgsz, conf=s.person_conf, classes=[PERSON], verbose=False)[0]
     persons, pconf = r.boxes.xyxy.cpu().numpy(), r.boxes.conf.cpu().numpy()
+    if s.team_centres is not None:  # colour group per person: nearest K-means centre of the jersey colour
+        cols = [jersey_colour(frame, b) for b in persons]
+        extra["teams"] = [-1 if c is None else int(nearest_centre([c], s.team_centres, s.team_scale)[0]) for c in cols]
 
     if s.puck_mode == "finetuned" and puck_model is not None:
         pucks, kconf = predict_tiled(puck_model, frame, s.tile, s.overlap, s.puck_conf)
@@ -102,10 +111,12 @@ def draw(frame, res: FrameResult, mapper: RinkMapper, minimap: Minimap, s: Setti
     mm = minimap.background.copy()
 
     ids = res.extra.get("ids", [-1] * len(res.persons))
-    for box, c, xy, ice, tid in zip(res.persons, res.person_conf, res.person_rink, res.on_ice, ids):
+    teams = res.extra.get("teams", [-1] * len(res.persons))
+    for box, c, xy, ice, tid, team in zip(res.persons, res.person_conf, res.person_rink, res.on_ice, ids, teams):
         if not ice and not s.show_off_ice:
             continue
-        col = PLAYER_COL if ice else OFF_ICE_COL
+        player_col = s.team_colours[team] if team >= 0 else PLAYER_COL
+        col = player_col if ice else OFF_ICE_COL
         x1, y1, x2, y2 = (box * scale).astype(int)
         cv2.rectangle(view, (x1, y1), (x2, y2), col, 2)
         cv2.circle(view, ((x1 + x2) // 2, y2), 4, col, -1)
@@ -113,7 +124,8 @@ def draw(frame, res: FrameResult, mapper: RinkMapper, minimap: Minimap, s: Setti
             cv2.putText(view, str(tid), (x1, y1 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.5, col, 2)
         if ice:
             p = tuple(int(v) for v in minimap.to_px(xy)[0])
-            cv2.circle(mm, p, 7, PLAYER_COL, -1, cv2.LINE_AA)
+            cv2.circle(mm, p, 7, player_col, -1, cv2.LINE_AA)
+            cv2.circle(mm, p, 7, (60, 60, 60), 1, cv2.LINE_AA)  # outline: a white jersey on white ice
             if tid >= 0:
                 cv2.putText(mm, str(tid), (p[0] + 8, p[1] - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (30, 30, 30), 1)
 

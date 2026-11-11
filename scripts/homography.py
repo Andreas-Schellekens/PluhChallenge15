@@ -103,6 +103,16 @@ class Lens:
         n = (pts - c) / f
         return n * (1 + self.k1 * (n ** 2).sum(1, keepdims=True)) * f + c
 
+    def valid(self, pts):
+        """Is the one-parameter model usable for these undistorted points? With k1 < 0 the
+        distorted radius r * (1 + k1 * r^2) grows only up to r = 1 / sqrt(3 * |k1|) and then
+        shrinks again: points further out would fold back INTO the image at a wrong place.
+        (For k1 = -0.125 that is r = 1.63 focal lengths, far outside the ice we use.)"""
+        pts = np.asarray(pts, dtype=np.float64).reshape(-1, 2)
+        if self.k1 >= 0:
+            return np.ones(len(pts), bool)
+        r2 = (((pts - self.K[:2, 2]) / self.K[0, 0]) ** 2).sum(1)
+        return r2 < 1 / (3 * -self.k1)
 
 class RinkMapper:
     """Everything needed to go between image pixels and rink coordinates."""
@@ -114,28 +124,54 @@ class RinkMapper:
         self.lens = Lens(lens.get("k1", 0.0), lens.get("f", 1000.0), tuple(lens.get("center", (960.0, 540.0))))
         self.img_pts = np.float64([p["image"] for p in cfg["points"]])
         self.rink_pts = np.float64([p["rink"] for p in cfg["points"]])
-        # method 0 = least squares over all points (no RANSAC: we trust our hand-measured points)
-        H, _ = cv2.findHomography(self.lens.undistort(self.img_pts), self.rink_pts, 0)
-        if apply_h(np.linalg.inv(H), self.rink_pts)[1].mean() < 0:
-            H = -H  # same homography, but now w > 0 for points in front of the camera
-        self.H_ref = H
-        self.H_ref_inv = np.linalg.inv(H)
+        # method 0 = least squares over all points (no RANSAC: we trust our hand-measured points).
+        # We fit in the direction rink -> image, so the error that is minimised is in PIXELS,
+        # where we measured. Fitting image -> rink minimises metres instead: far from the camera
+        # one pixel is several metres, so the far keypoints would dominate and the near ones
+        # would be sacrificed (H3 in the log: 36-75 px off). With exactly 4 points both
+        # directions give the same exact solution.
+        H_inv, _ = cv2.findHomography(self.rink_pts, self.lens.undistort(self.img_pts), 0)
+        if apply_h(H_inv, self.rink_pts)[1].mean() < 0:
+            H_inv = -H_inv  # same homography, but now w > 0 for points in front of the camera
+        self.H_ref_inv = H_inv
+        self.H_ref = np.linalg.inv(H_inv)
 
     def keypoint_errors(self):
+        """Reprojection error per keypoint in rink units (how far the measured pixel lands
+        from the known rink position)."""
         rink, _ = apply_h(self.H_ref, self.lens.undistort(self.img_pts))
         return np.linalg.norm(rink - self.rink_pts, axis=1)
+
+    def keypoint_errors_px(self):
+        """The same error in pixels: known rink position drawn into the image vs measured pixel."""
+        return np.linalg.norm(self.rink_to_image(self.rink_pts)[0] - self.img_pts, axis=1)
 
     def image_to_rink(self, pts, H_to_ref=None):
         ref = apply_h(H_to_ref, pts)[0] if H_to_ref is not None else np.asarray(pts, float).reshape(-1, 2)
         return apply_h(self.H_ref, self.lens.undistort(ref))[0]
 
+    def rink_noise(self, pts, sigma_px, H_to_ref=None):
+        """How uncertain is a rink position, if the pixel it comes from is off by sigma_px?
+        Returns one 2x2 covariance (rink units squared) per point: J * J^T * sigma_px^2, where J
+        is the Jacobian of image -> rink at that pixel (how far the rink position moves per pixel,
+        measured by moving the pixel 1 px left/right and up/down). Next to the camera a pixel is
+        centimetres; at the far end it is metres, mostly along the length of the rink."""
+        pts = np.asarray(pts, float).reshape(-1, 2)
+        covs = []
+        for p in pts:
+            around = self.image_to_rink(p + np.array([[1, 0], [-1, 0], [0, 1], [0, -1]], float), H_to_ref)
+            J = np.stack([(around[0] - around[1]) / 2, (around[2] - around[3]) / 2], axis=1)
+            covs.append(J @ J.T * sigma_px ** 2)
+        return covs
+
     def rink_to_image(self, pts, H_to_ref=None):
         """Returns image points and a mask of points in front of the camera."""
         und, w = apply_h(self.H_ref_inv, pts)
         img = self.lens.distort(und)
+        ok = (w > 0) & self.lens.valid(und)
         if H_to_ref is not None:
             img = apply_h(np.linalg.inv(H_to_ref), img)[0]
-        return img, w > 0
+        return img, ok
 
     def on_ice(self, rink_xy, margin):
         boards = boards_polyline(self.spec).astype(np.float32)
@@ -208,11 +244,11 @@ def main():
     # --- 1+2. lens model and reference homography from the measured keypoints ---
     cfg = json.loads(Path(args.keypoints).read_text())
     mapper = RinkMapper(cfg)
-    errors = mapper.keypoint_errors()
+    errors, errors_px = mapper.keypoint_errors(), mapper.keypoint_errors_px()
     print(f"Reference homography ({mapper.spec.name}, k1={mapper.lens.k1}), "
-          f"reprojection error per keypoint ({mapper.spec.unit}):")
-    for p, e in zip(cfg["points"], errors):
-        print(f"  {p['name']:32s} {e:5.2f}")
+          f"reprojection error per keypoint ({mapper.spec.unit} | px):")
+    for p, e, e_px in zip(cfg["points"], errors, errors_px):
+        print(f"  {p['name']:32s} {e:5.2f} | {e_px:5.1f}")
 
     cap = cv2.VideoCapture(args.video)
     if not cap.isOpened():
@@ -313,6 +349,7 @@ def main():
         "rink": mapper.spec.name, "unit": mapper.spec.unit, "lens_k1": mapper.lens.k1,
         "reference_frame": ref_idx, "stride": args.stride, "drift": args.drift, "min_inliers": args.min_inliers,
         "keypoint_reprojection_error": {p["name"]: round(float(e), 3) for p, e in zip(cfg["points"], errors)},
+        "keypoint_reprojection_error_px": {p["name"]: round(float(e), 1) for p, e in zip(cfg["points"], errors_px)},
         "frames": len(Hdf), "fallback_frames": int(Hdf["fallback"].sum()),
         "inliers_min": int(Hdf["inliers"].min()), "inliers_median": float(Hdf["inliers"].median()),
         "persons_per_frame": round(len(pos) / len(Hdf), 2),

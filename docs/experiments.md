@@ -155,6 +155,9 @@ fine-tuned model (E1) has to show.
 
 ## H2 – Homography with lens correction on clip 2, 2026-10-30
 
+> **Superseded by H3 (2026-11-11):** the 4 keypoints of this entry are all next to the camera,
+> and the mapping they give is wrong in the far half of the rink.
+
 Command: `python scripts/homography.py --video Video/fillempje.mp4 --keypoints configs/keypoints_fillempje.json --detections outputs/baseline/fillempje_yolo26s_1280/detections.csv --drift none`
 
 **1. Lens correction (plumb-line).** A homography maps a plane to a plane and keeps straight
@@ -359,8 +362,9 @@ E1 was scored again on the new val set, so all models are compared on the same 2
      precise.
 2. **The hard negatives did not help (E2a → E2b).** E2b finds 1 more puck, but it gives
    11 false alarms on val instead of 1. `val_false_positives.jpg` shows that they are
-   almost all **stick blades** (and a glove). In 7 of the 11 cases the frame was marked null,
-   so the reviewer saw no puck there.
+   almost all **stick blades** (and a glove). In 6 of the 11 cases the frame was marked null,
+   so the reviewer saw no puck there. *(Corrected 2026-11-11: this said 7; `eval_E2b.log`
+   shows 6 on null frames and 5 on frames with a puck.)*
    - The clip says the same: more detections, lower precision. The far-end spot from round 1 is
      back too (f86–f152).
    - Possible causes, not proven:
@@ -381,6 +385,13 @@ E1 was scored again on the new val set, so all models are compared on the same 2
 4. **Overfitting again.** Both runs reach their best val score before epoch 40, while the
    train loss keeps falling (E2a box loss: 1.65 at epoch 20 → 0.52 at epoch 100).
 
+> **Read this entry together with A1 and S1 (2026-11-11).** The audit found that E2a and E2b
+> differ in more than the hard negatives (almost all random crops were different too), and
+> that the val set favours E1. S1 repeats the comparison cleanly with three seeds.
+> The tile val numbers in the table are from the re-validation of `best.pt` (`metrics.json`);
+> the training curve (`results.csv`) reads 0.617 / 0.336 for E2a at its best epoch, because
+> Ultralytics validates with slightly different settings during training.
+
 **Conclusion:** **E2a is the best puck model so far**, and the one the app should use.
 Doubling the reviewed frames raised precision and AP@50. Our version of hard negatives did not
 help: it gave more false positives, mainly on stick blades. The next steps for data are a
@@ -388,6 +399,10 @@ team-wide labelling rule for pucks at the blade, and blades as explicit hard neg
 repeat with 2–3 seeds would tell whether E2a vs E2b is a real difference.
 
 ## T1 – Tracking (Extra Mile): ByteTrack for players, Kalman filter for the puck, 2026-11-05
+
+> **The numbers in this entry are superseded by T2 (2026-11-11).** They were measured with the
+> 4-point homography, which was wrong in the far half of the rink (H3), and the gap test
+> flattered the filter (A1). The method described here is still what the code does.
 
 **Why.** Until now every frame was processed on its own. Players had no identity over time,
 and the puck (detected in only ~18% of the frames, E2a) blinked on the minimap or jumped to a
@@ -467,3 +482,348 @@ false jumps. For the minimap it is the most visible improvement since E2a. Playe
 appearance features (team colour plus jersey number). The app's Clip tab now tracks by default
 (sidebar: Kalman settings), and the Tracking tab shows these results with the before/after
 minimap video.
+
+---
+
+# Review round, 2026-11-11
+
+Everything from here on was run on an RTX 2080 Ti (11 GB), from a fresh clone with the team's
+`data/` and `outputs/`. First check: `best.pt` of E2a validated on this machine gives
+mAP@50 0.635 / mAP@50:95 0.382, the same as logged (0.634 / 0.382).
+
+## A1 – Audit of the code and the log, 2026-11-11
+
+**Goal:** before adding anything, check that what we already claim is right. A second Claude
+Code agent read every script and compared every number in the docs with the saved outputs
+(read-only; the main session verified the findings it acted on).
+
+**Confirmed correct:** dataset counts, the time split (train ends at f4170, val starts at f4200,
+no frame or tile in both), label conversion, the IoU matching and AP in `eval_puck.py`, the rink
+dimensions, the Kalman equations, and all E0-B / H1 / E1 / E2 / T1 summary numbers against their
+`metrics.json` and `summary.json`.
+
+**What was wrong, and what we did about it**
+
+| # | finding | consequence | action |
+|---|---|---|---|
+| 1 | The 4-point homography (H2) only has keypoints at x = −26…−20 m and is extrapolated 50 m. The far goal landed at x ≈ 100 m instead of 26 m | about 0.7 players per frame at the far end were dropped as "off the ice"; H2 called them spectators | **H3**: two more keypoints, fit in pixels |
+| 2 | The gap test in T1 scored the Kalman filter and "hold last position" on different frames, and compared the filter with its own filtered output | the filter looked 3–4× better than holding; it is less | **T2**: same frames, raw hidden detection as reference |
+| 3 | E2a and E2b did not differ "only" in the hard negatives: one random stream drew all crops, so the hard-negative draws shifted every later crop. 134 of E2a's 872 train tiles are in E2b | "hard negatives did not help" was confounded with a full re-draw of the data | `make_puck_dataset.py` now uses a separate random stream for hard negatives; **S1** repeats the comparison |
+| 4 | The val set favours E1: 15 of the 25 val frames are null frames picked *because E1 found nothing there*, and 5 of the 6 val pucks added in round 2 were E1's own proposals | E1 has 0 false positives on those frames by construction. On the 5 val pucks that no model proposed: E1 2/5, E2a 2/5, E2b 3/5 | documented here and in `annotation.md`; S1 reports the "independent" pucks separately |
+| 5 | `best.pt` is chosen on the val set and reported on the same val set; there is no test set. The look-alike spot (56, 400) was chosen from E1's false positives, one of them on a val frame | all tile val mAP values are optimistic | stated as a limit; a model-free test set is the first data to-do |
+| 6 | Lens model: with k1 < 0 the distorted radius folds back beyond r = 1.63 focal lengths, so template points far outside the view were drawn *inside* the image (the grey X across the ice in `reference_check.jpg`) | wrong lines in the check image, positions were not affected | `Lens.valid()` masks those points |
+| 7 | Text errors: "7 of the 11" false positives on null frames is 6; the 13 leftover puck jumps were not all "new tracks" (6 were, 7 were accepted detections) | – | corrected in place / in T2 |
+| 8 | App: on a failed SIFT match the app silently used the identity; the puck selector defaulted to the alphabetically first run; `requirements.txt` allowed a Streamlit too old for the app; no way to add a clip from the app | – | fixed (`app.py`, `requirements.txt`): last good homography + warning, default E2a, `streamlit>=1.50`, upload in the sidebar |
+
+**Numbers in this log that no saved output can confirm** (kept, but treat them as unverified):
+the `yolo26s_640` row and the Quadro fps in E0, "3.6 frames/s" in H1, the k1 plumb-line table in
+H2 (no calibration script in the repo), and the clip samples of E1/E2 (23/30, 28/30, 19/30), which
+are visual checks by Claude Code that no team member has confirmed.
+
+## H3 – Homography with 6 keypoints, fitted in pixels, 2026-11-11
+
+**Why.** H2 had exactly 4 points, so its reprojection error was 0 by construction and said
+nothing. The independent check we had not done: where does the **far goal** land? Its posts
+stand on the ice at (26, ±0.915) m. With the H2 mapping their measured pixels, (919, 400.5) and
+(949.5, 400.5), land at about x = 113 m and x = 95 m. The template drew the far goal 19 px too low.
+
+Command: `python scripts/homography.py --video Video/fillempje.mp4 --keypoints configs/keypoints_fillempje.json --detections outputs/baseline/fillempje_yolo26s_1280/detections.csv --drift none --name fillempje_6pt`
+
+**Change 1: two more keypoints.** The bases of the far goal posts, measured on the median
+background in a 5× zoom. Now there are 6 points, 2 more than the minimum, and the points span
+the whole length of the rink instead of the nearest 6 m.
+
+**Change 2: fit in pixels, not in metres.** `cv2.findHomography(src, dst)` minimises the error
+in `dst` units. We used image → rink, so the error was in metres. Far from the camera one pixel
+is several metres, so the two far posts outweighed everything and the near points were
+sacrificed:
+
+| fit direction | error that is minimised | near dots / crease corners | far posts |
+|---|---|---|---|
+| image → rink (as before) | metres | 37 / 13 / 75 / 31 px off | 2 / 1 px |
+| **rink → image (now)** | **pixels** | **7.6 / 5.1 / 5.1 / 2.8 px** | **5.0 / 4.2 px** |
+
+We measured in pixels, so pixels are where the error should be spread evenly. The matrix is
+inverted afterwards to go from image to rink. With exactly 4 points both directions give the
+same exact solution, which is why this never showed before.
+
+**Results**
+
+| check | H2 (4 points) | H3 (6 points) |
+|---|---|---|
+| reprojection error | 0 (meaningless) | 2.8–7.6 px per point |
+| the same error in metres | 0 | near points 0.02–0.54 m, far posts 6.3 and 9.6 m |
+| persons on the ice per frame (of 13.13 detected, margin 2 m) | 11.64 | **12.33** |
+| `reference_check.jpg` | far goal line 19 px below the real goal | far goal line ends at the far goal; near goal line and both circles still match |
+
+**Observations**
+1. **A residual of about 5 px on every point means our three assumptions do not fit together
+   exactly:** IIHF dimensions for a club rink, a lens with one distortion parameter, and
+   hand-measured points on faint markings. We tested whether the lens explains it: a stronger
+   k1 lowers the residual (−0.3 gives 2.7 px) but bends the boards again (H2: −0.125 is the
+   straightest). We also tried other rink lengths (far goal at 20–28 m): the residual changes
+   by about 1 px (5.2 to 6.2 px), so this camera cannot tell how long the rink is.
+2. **The far end stays coarse, and now we can say how coarse.** 5 px at the far goal is 6–10 m
+   along the rink. The camera is low and at one end: the far half of the rink (30 m) covers
+   about 30 image rows. No fit can repair that; only a second or higher camera could.
+3. **Why H3 is still clearly better than H2.** H2 was exact on 4 points and 70–90 m wrong at the
+   far goal. H3 is a few pixels off everywhere and keeps the far players on the rink.
+4. The planar assumption is unchanged: only points **on the ice** follow the homography. That
+   is why we use the base of the posts and the feet of the players, never a box centre.
+
+**Conclusion:** the minimap now makes spatial sense over the whole rink instead of the near
+zone only. Positions next to the camera are good to a few decimetres; beyond the centre line
+they are an indication (several metres), and the log says so wherever they are used.
+
+## T2 – Tracking re-measured: fair gap test, new homography, rink limit, 2026-11-11
+
+Commands:
+```
+python scripts/track.py --video Video/fillempje.mp4 --keypoints configs/keypoints_fillempje.json --puck-weights outputs/train/fillempje_v3_yolo26s_puck_640/weights/best.pt --tracker configs/bytetrack_hockey.yaml --name fillempje_teams --redo
+```
+(E2a puck model, tuned ByteTrack config, every 2nd frame, 2548 frames. `players.csv` now also
+stores the person boxes, for TM1.)
+
+**What changed against T1**
+1. **Homography H3.** Detections at the far end are now on the ice.
+2. **Fair gap test** (A1, finding 2). Both methods are scored on the same frames (hidden frames
+   where the filter still shows a puck), against the raw hidden detection.
+3. **Rink limit.** While the filter predicts without a detection, a prediction that leaves the
+   rink ends the track: the puck cannot be behind the boards.
+
+**Results: puck**
+
+| | T1 (as logged) | T2 |
+|---|---|---|
+| frames with a puck detection on the ice | 17.2% | 17.9% |
+| frames with a puck on the minimap after the filter | 39.6% | **41.6%** (14.3% measured + 27.3% predicted) |
+| detections refused by the gate (frames) | 64 | 66 |
+| jumps > 40 m/s, raw detections | 26 | 26 |
+| jumps > 40 m/s, after the filter | 13 | 24, of which 16 inside one track and 8 new tracks starting elsewhere |
+
+Gap test, T2 (median error in metres against the hidden detection):
+
+| hidden block | median time since the puck was last seen | puck still shown | Kalman | hold last position | ratio |
+|---|---|---|---|---|---|
+| 0.10 s | 0.07 s | 93% | **0.15 m** | 0.40 m | 2.7× |
+| 0.27 s | 0.17 s | 73% | **0.43 m** | 0.65 m | 1.5× |
+| 0.50 s | 0.27 s | 63% | **0.81 m** | 0.97 m | 1.2× |
+
+T1 reported 0.10 / 0.30 / 0.78 m against 0.44 / 1.03 / 1.21 m, "3–4× more accurate". The honest
+number is 2.7× for very short gaps and almost nothing at half a second.
+
+**Results: players** (tuned ByteTrack config, on-ice tracks)
+
+| | T1 | T2 |
+|---|---|---|
+| detections on the ice per frame (margin 1 m) | 11.08 | 11.85 |
+| unique IDs | 221 | 198 |
+| IDs longer than 5 s | 82 | 90 |
+| median track life | 3.94 s | 4.52 s |
+
+The tracker itself is unchanged. The numbers move because far-end players are no longer cut
+out of their tracks by the on-ice filter.
+
+**Error analysis: why the jump count went up**
+- We listed the within-track jumps before the rink limit was added (22 with the default
+  settings). **15 of them were one event:** at f660 the filter had been predicting for a while, its uncertainty had grown, and
+  it accepted a detection 22.8 m away. That one update gave the state a velocity of about
+  40 m/s, and for the next 0.5 s the filter "predicted" the puck straight through the boards
+  to x = −37 m. Every step of that flight counts as a jump.
+- The rink limit removes exactly this failure (30 → 24 jumps). It is a constraint from the
+  sport, not a tuning knob.
+- The rest are single accepted detections 2–12 m from the prediction after a period of
+  coasting: the gate is wide at that moment because the velocity is uncertain. A stricter gate
+  would refuse them, and would also refuse real passes. We left it.
+- T1 scored 13 because the same f660 event happened not to occur with the old mapping. The
+  count is fragile: one bad update moves it by 14. As a metric, "share of frames with a
+  plausible puck" would be more robust, but it needs labels.
+
+**Tested and not kept: measurement noise that grows with distance.** Idea: one pixel of
+detection noise is centimetres near the camera and metres far away, so each detection gets its
+own covariance R = J·Jᵀ·σ²ₚₓ (J = Jacobian of image → rink at that pixel,
+`RinkMapper.rink_noise`). With σₚₓ = 2: jumps 24 → 23, gap test unchanged (0.17 / 0.43 / 0.79 m).
+Only 19 of the 489 puck detections are in the far half, so there is almost nothing for it to
+act on. The option stays in `track.py` (`--puck-px-std`, default 0 = off).
+
+**Conclusion:** the Kalman filter still more than doubles how often the puck is on the minimap
+(17.9% → 41.6%) and is 2.7× closer than a frozen puck during very short gaps. Its advantage
+over half a second is small, and it does not reduce impossible jumps by half as T1 claimed.
+
+## TM1 – Team colours (second Extra Mile): K-means on jerseys, occupancy heatmaps, 2026-11-11
+
+**Why.** Every person on the ice was the same orange dot; the log listed "referees are drawn as
+players" as open since H1. The brief names this as an extension: team colour clustering and
+occupancy heatmaps (KDE).
+
+Commands:
+```
+python scripts/teams.py --video Video/fillempje.mp4 --players outputs/track/fillempje_teams/players.csv --keypoints configs/keypoints_fillempje.json --names white other blue --score --name fillempje
+```
+
+**Method** (`scripts/teams.py`, no labels used for fitting)
+1. **Jersey crop:** the middle half of the box width, from 20% to 50% of its height (below the
+   helmet, above the pants).
+2. **Feature:** three numbers per person in CIELAB: the 75th percentile of L (lightness) and
+   the mean of a and b (colour). Lab instead of HSV because hue is undefined for white, grey
+   and black, which is most of what we have to separate.
+3. **Standardise**, then **K-means with k = 3** (k-means++ start, 10 restarts, fitted on the
+   28 546 on-ice boxes of at least 40 px high).
+4. **Track vote:** each detection takes the majority colour of the last 30 detections (about
+   1 s) of its ByteTrack ID.
+5. **Heatmaps:** per group, a 2D histogram of rink positions blurred with a Gaussian of
+   σ = 1.5 m. That is a kernel density estimate on a grid.
+
+**Iteration 1 failed, and why.** First version: the median Lab colour, no scaling.
+
+| | iteration 1 | iteration 2 (kept) |
+|---|---|---|
+| feature | median L, a, b | 75th percentile of L, mean a, mean b, each divided by its standard deviation |
+| the 3 cluster centres (L, a, b) | (109, 127, 125), (74, 126, 126), (43, 129, 120) | (121, 127, 125), (67, 124, 133), (67, 131, 114) |
+| what the clusters are | light / medium / dark: **three levels of brightness** | white team / people in dark clothes at the boards / blue team |
+| silhouette for k = 2, 3, 4, 5 | 0.61, 0.49, 0.46, 0.42 (k = 2 "best") | 0.46, **0.49**, 0.37, 0.34 (k = 3 best) |
+| detections that agree with the majority of their own track | 81.0% | 85.8% |
+
+- **Cause 1: K-means uses plain Euclidean distance.** L ranged over about 150 units and a/b over
+  about 30, so lightness decided everything. The blue team and the dark-clothed people differ
+  mainly in b (114 against 133), which hardly counted. Dividing each feature by its standard
+  deviation (33.0, 3.2, 7.8) fixes that.
+- **Cause 2: the white jerseys have a large dark crest.** The median of the crop often landed on
+  the crest, so white players fell into the "medium" cluster. The 75th percentile of L looks
+  at the lighter part of the crop, which is the jersey itself.
+- In this dim rink a white jersey is grey (L = 121 of 255) and the blue one is a dark navy.
+  Cluster names cannot be read off the centre colour, so we name the clusters ourselves after
+  looking at the crop sheets (`--names`, lightest first).
+
+**Results** (30 192 on-ice detections)
+
+| group | per frame | what the crop sheet shows |
+|---|---|---|
+| white | 5.7 | white team, including their goalie in the near goal |
+| blue | 3.3 | blue team |
+| other | 2.8 | people in camouflage or black jackets standing on the ice at both side boards |
+
+**Accuracy on a labelled sample.** 120 random on-ice detections (`sample.jpg`, `sample.csv`),
+labelled from the crops **by Claude Code, not yet confirmed by a team member**; 10 were
+unclear (blurred, two people in one box) and left out.
+
+| | correct of 110 | accuracy | colour flips per 100 detections |
+|---|---|---|---|
+| per detection | 101 | 91.8% | 2.78 |
+| vote over the whole track | 98 | 89.1% | – |
+| **vote over the last 30 detections (kept)** | **105** | **95.5%** | **0.46** |
+
+Confusion after the window vote (rows = truth): blue 38 / 2 other / 1 white; other 24 / 1 blue /
+1 white; white 43 / 0 / 0.
+
+**Observations**
+1. **The whole-track vote made it worse (91.8% → 89.1%).** It assumes one track is one person.
+   T2 shows that is false: 198 IDs for about 14 people, and when two players cross ByteTrack
+   can hand the ID to the other one. A blue and a white player then share one "majority". The
+   error analysis of the tracker predicted this; here it is measured.
+2. **A short window keeps the benefit and limits the damage:** 4 more correct, and 6× fewer
+   colour flips on the minimap. The window length (30) was chosen on the same 110 crops, and
+   5 to 150 detections all score 103–105, so the exact value is not established.
+3. **Main confusion: blue ↔ dark.** A blue jersey in the shadow near the boards is nearly black,
+   and a dark jacket is nearly navy. 4 of the 9 per-detection errors were blue players read as
+   white; in the crops we looked at, a white player stands partly in front, so the crop holds
+   both.
+4. **"Other" is not a clean referee class.** The heatmap puts this group at two fixed spots on
+   both side boards near the blue line. They stand inside the 1 m margin we allow around the
+   boards, so they count as "on the ice". It separates them from the teams, which is what the
+   minimap needs; whether they are officials or bench staff we cannot tell from colour.
+5. **Heatmaps** (`heatmaps.jpg`): white is concentrated in front of the near goal (their goalie
+   stands there for the whole clip), blue occupies the near zone and the slot. So in this clip
+   blue attacks the goal next to the camera. Far-end positions are smeared over several metres
+   (H3), so the far half of the heatmaps is only an indication.
+
+**App:** sidebar "Team colours" (on by default when a model exists) colours the boxes and the
+minimap dots; the Clip tab applies the window vote live; the new Teams tab shows these results.
+
+**Conclusion:** unsupervised colour clustering separates the two teams and the bystanders with
+about 95% accuracy on a small sample, after one failed iteration that taught us to scale the
+features. The remaining errors come from overlapping players and from ID switches in the
+tracker, not from the clustering itself.
+
+## S1 – Seed study: is E2a really better, and do hard negatives help?, 2026-11-11
+
+**Goal:** E2 compared one training run per variant on 10 val pucks. Two questions were left
+open. (1) How much does a result move when only the random seed changes? (2) Do hard negatives
+help, now that the comparison is clean (A1, finding 3)?
+
+**Setup**
+- GPU: RTX 2080 Ti 11 GB. Same settings as E2 (YOLO26s, 640 px tiles, 100 epochs, batch 16);
+  only `--seed` changes: 0, 1, 2.
+- **E2a** = `data/puck_tiles/fillempje_v3_tiles640` (872 train tiles, the E2a dataset).
+- **E2c** = `data/puck_tiles/fillempje_v3hn2_tiles640`: the same 872 tiles **plus** 135 hard
+  negatives (skate crops and the logo spot at (56, 400)). Built with the corrected
+  `make_puck_dataset.py`, so the base tiles are identical and the val tiles are the same 200
+  (30 puck boxes). This replaces E2b, which differed in almost every tile.
+- Per run: tile val mAP from training, then `eval_puck.py` on the 25 full val frames (10 pucks)
+  and on the clip. "Independent" = the 5 val pucks that no model proposed (A1, finding 4).
+
+```
+python scripts/make_puck_dataset.py --export data/roboflow/<export-folder> --val-from-frame 4200 --detections outputs/baseline/fillempje_yolo26s_1280/detections.csv --skate-crops 4 --lookalike 56 400 --name fillempje_v3hn2_tiles640
+python scripts/train_puck.py --data data/puck_tiles/fillempje_v3_tiles640/data.yaml --seed N --name seed_E2a_sN
+python scripts/train_puck.py --data data/puck_tiles/fillempje_v3hn2_tiles640/data.yaml --seed N --name seed_E2c_sN
+python scripts/eval_puck.py --finetuned outputs/train/<run>/weights/best.pt --frames data/puck_tiles/fillempje_v3_tiles640/frames.csv --video Video/fillempje.mp4 --name <run>
+python scripts/seed_summary.py --variant E2a seed_E2a_s0 seed_E2a_s1 seed_E2a_s2 --variant E2c seed_E2c_s0 seed_E2c_s1 seed_E2c_s2
+```
+
+Outputs: `outputs/train/seed_*`, `outputs/eval_puck/seed_*`, `outputs/seeds/summary.csv`.
+
+**Results per run** (full frames at conf 0.25, IoU 0.5)
+
+| run | tile mAP@50 | tile mAP@50:95 | TP / FP / FN (10 pucks) | AP@50 full frame | independent pucks | FP on null frames | clip frames with a puck |
+|---|---|---|---|---|---|---|---|
+| E2a seed 0 | 0.565 | 0.298 | 6 / 4 / 4 | 0.594 | 2/5 | 2 | 846 |
+| E2a seed 1 | 0.509 | 0.311 | 6 / 2 / 4 | 0.612 | 2/5 | 1 | 798 |
+| E2a seed 2 | 0.618 | 0.313 | 6 / 2 / 4 | 0.572 | 2/5 | 1 | 845 |
+| E2c seed 0 | 0.517 | 0.298 | 6 / 3 / 4 | 0.547 | 2/5 | 1 | 819 |
+| E2c seed 1 | 0.480 | 0.305 | 5 / 2 / 5 | 0.534 | 2/5 | 1 | 636 |
+| E2c seed 2 | 0.548 | 0.301 | 4 / 4 / 6 | 0.506 | 1/5 | 1 | 701 |
+| *E2a as logged in E2 (RTX 4060, seed 0)* | *0.634* | *0.382* | *6 / 1 / 4* | *0.65* | *2/5* | *1* | *455* |
+
+**Mean ± standard deviation over 3 seeds**
+
+| variant | tile mAP@50 | tile mAP@50:95 | recall | precision | FP | AP@50 full frame |
+|---|---|---|---|---|---|---|
+| E2a (no hard negatives) | 0.564 ± 0.055 | 0.307 ± 0.008 | 0.60 ± 0.00 | 0.70 ± 0.09 | 2.7 ± 1.2 | 0.593 ± 0.020 |
+| E2c (+ hard negatives) | 0.515 ± 0.034 | 0.301 ± 0.004 | 0.50 ± 0.10 | 0.63 ± 0.11 | 3.0 ± 1.0 | 0.529 ± 0.021 |
+
+**Observations**
+1. **The seed alone moves tile mAP@50 by about ±0.05** (0.509 to 0.618 for the same data and
+   settings). The val tiles hold only 30 puck boxes, so one box is 3 points of recall. A
+   difference between two single runs smaller than about 0.1 mAP@50 means nothing here. That
+   covers E1 against E2a in the E2 entry.
+2. **The E2a number we reported is not the typical one.** The logged run has mAP@50:95 0.382;
+   three new runs give 0.298 to 0.313. The settings are identical (checked in `args.yaml`); the
+   differences are the GPU and the random draw (seed 0 on another GPU is not the same run). The
+   weights do validate at 0.635 / 0.382 on this machine, so the number is real, but it is the
+   best of four draws on the set it was selected on. The honest expectation for this recipe is
+   **mAP@50 0.56 ± 0.06, mAP@50:95 0.31 ± 0.01**.
+3. **Recall on full frames is stable: 6/10 in all three E2a runs**, and the same 2 of the 5
+   independent pucks every time. What varies is the number of false positives (2 to 4) and how
+   often the model fires on the clip (798 to 846 frames, against 455 for the logged run). So
+   the logged E2a is the most cautious of the four, which is why it has 1 false positive.
+4. **Hard negatives do not help, with the confound removed.** E2c is lower on every measure:
+   tile mAP@50 −0.05 (inside the seed spread), full-frame AP@50 −0.06 (the two ranges do not
+   overlap: 0.572–0.612 against 0.506–0.547), recall 0.5 against 0.6. The false positives they
+   were meant to remove did not go down (3.0 against 2.7; 1.0 against 1.3 on the null frames).
+   Three seeds and 10 pucks are too few for a significance test, so we say "no evidence of a
+   benefit, some evidence of a small cost", not "proven harmful".
+5. **The 11 false positives of E2b did not come back** (E2c: 2 to 4). So the worse precision of
+   E2b in the E2 entry came mostly from the different draw of tiles, not from the hard
+   negatives. The E2 conclusion pointed the right way, for a partly wrong reason.
+
+**Link to annotation:** the hard negatives are crops without a label. They teach "skates and
+the logo are not a puck", but the main false positive in E2 was the dark stick blade right next to a puck, and that
+is a labelling question (does a puck against the blade count?), not something more background
+crops can fix. The false positives of the six seed runs were counted, not looked at one by one,
+so whether they are the same blade cases is still to be checked by a team member
+(`outputs/eval_puck/seed_*/`).
+
+**Conclusion:** E2a stays the recipe; the app keeps the logged E2a weights, since they have the
+fewest false positives. When we quote its quality we give the seed mean (mAP@50 0.56,
+mAP@50:95 0.31) next to the single best run (0.634 / 0.382). The next gain has to come from
+labels (the blade rule, more val pucks), not from more hard negatives or more training runs.

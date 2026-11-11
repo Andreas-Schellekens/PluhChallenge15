@@ -123,6 +123,11 @@ def overlaps(box, x0, y0, tile, margin=0):
 def main():
     args = parse_args()
     rng = random.Random(args.seed)
+    # The hard negatives draw from their OWN random stream. With one shared stream (as in E2b)
+    # every hard-negative draw shifted all later positive/negative crops, so a dataset with
+    # hard negatives had almost no tile in common with the one without. Now the normal crops
+    # are identical with and without hard negatives, and a comparison changes only one thing.
+    hard_rng = random.Random(args.seed + 1)
     export = Path(args.export)
     out = Path("data/puck_tiles") / args.name
     for split in ("train", "val"):
@@ -131,6 +136,7 @@ def main():
 
     persons = pd.read_csv(args.detections).query("`class` == 'person'") if args.detections else None
     T, rows, n_tiles = args.tile, [], {"train": [0, 0], "val": [0, 0]}  # [with puck, without]
+    n_hard = [0, 0]  # hard negatives [written, skipped because the crop would contain the puck]
     for img_path in sorted((export / "train" / "images").glob("*.jpg")):
         frame = int(re.search(r"_f(\d{6})", img_path.name).group(1))
         split = "val" if frame >= args.val_from_frame else "train"
@@ -158,12 +164,15 @@ def main():
             points = [tuple(p) for p in args.lookalike]
             if persons is not None and args.skate_crops:
                 feet = persons[persons.frame == frame]
-                for _, d in feet.sample(min(args.skate_crops, len(feet)), random_state=rng.randint(0, 9999)).iterrows():
+                for _, d in feet.sample(min(args.skate_crops, len(feet)), random_state=hard_rng.randint(0, 9999)).iterrows():
                     points.append(((d.x1 + d.x2) / 2, d.y2))
             for px, py in points:
-                x0, y0 = random_origin(rng, px, px, w, T), random_origin(rng, py, py, h, T)
+                x0, y0 = random_origin(hard_rng, px, px, w, T), random_origin(hard_rng, py, py, h, T)
                 if not any(overlaps(b, x0, y0, T, margin=8) for b in boxes):
                     origins.append((x0, y0))
+                    n_hard[0] += 1
+                else:  # the crop would contain the puck: skates right next to the puck stay missing
+                    n_hard[1] += 1
 
         for x0, y0 in origins:
             name = f"f{frame:06d}_x{x0}_y{y0}"
@@ -179,6 +188,8 @@ def main():
     for split, (pos, neg) in n_tiles.items():
         frames = [r["frame"] for r in rows if r["split"] == split]
         print(f"{split}: {len(frames)} frames {frames} -> {pos} tiles with puck, {neg} without")
+    if sum(n_hard):
+        print(f"hard negatives: {n_hard[0]} written, {n_hard[1]} skipped (crop would contain the puck)")
     print(f"Saved to {out}")
 
 

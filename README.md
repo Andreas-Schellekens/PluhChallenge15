@@ -17,12 +17,13 @@ Main clip since 2026-10-30: `Video/fillempje.mp4` (static camera behind the goal
 | Part | Status |
 |---|---|
 | Pretrained baseline (E0, E0-B) | Done: players OK, puck in only 10/2548 frames (high precision, almost no recall). See [`docs/experiments.md`](docs/experiments.md) |
-| Puck annotation (40–80 frames) | 64 human-reviewed frames: 41 with a puck + 23 verified without (2 rounds). See [`docs/annotation.md`](docs/annotation.md) |
-| Puck fine-tuning + mAP@50 / mAP@50:95 | Done (E1, E2a, E2b). Best: E2a, tile val mAP@50 0.634 / mAP@50:95 0.382; full frames recall 0/10 → 6/10 with 1 false positive, AP@50 0.01 → 0.65 vs baseline. See [`docs/experiments.md`](docs/experiments.md) |
-| Homography + rink minimap | Done (H2): lens correction + 4 keypoints, IIHF template |
-| Streamlit dashboard | Done: `streamlit run app.py`, all parameters adjustable |
-| Extra Mile: tracking (T1) | Done: ByteTrack player IDs + Kalman filter for the puck (puck on the minimap in 17% → 40% of frames). `scripts/track.py`, app tab Tracking |
-
+| Puck annotation (40–80 frames) | 64 human-reviewed frames: 41 with a puck + 23 verified without (2 rounds). See [`docs/annotation.md`](docs/annotation.md). Open: team-wide labelling rule for a puck at the stick blade, and a consistency check between two labellers |
+| Puck fine-tuning + mAP@50 / mAP@50:95 | Done (E1, E2a, E2b, seed study S1). Best: E2a, tile val mAP@50 0.634 / mAP@50:95 0.382 for the run we use; over 3 seeds the same recipe gives 0.56 ± 0.06 / 0.31 ± 0.01. Full frames: recall 0/10 → 6/10 (in every seed) with 1 to 4 false positives, AP@50 0.01 → 0.65 (seed mean 0.59) vs baseline. Hard negatives gave no gain (S1) |
+| Homography + rink minimap | Done (H3): lens correction + 6 keypoints fitted in pixels, IIHF template. Near the camera good to decimetres, beyond the centre line only to several metres |
+| Streamlit dashboard | Done: `streamlit run app.py`, all parameters adjustable, clips can be added from the sidebar |
+| Extra Mile: tracking (T1, T2) | Done: ByteTrack player IDs + Kalman filter for the puck (puck on the minimap in 18% → 42% of frames). `scripts/track.py`, app tab Tracking |
+| Extra Mile: team colours (TM1) | Done: K-means on jersey colours splits white / blue / bystanders (95.5% on a 110-crop sample), plus occupancy heatmaps. `scripts/teams.py`, app tab Teams |
+| Review (A1) | 2026-11-11: code and log audited; the errors found are listed in the log with what was done about each |
 ## Repository layout
 
 ```
@@ -37,6 +38,8 @@ scripts/
   propose_model.py           assisted labelling round 2: the fine-tuned model proposes pucks
   kalman.py                  Kalman filter for the puck on the rink (predict / gate / update)
   track.py                   tracking over the clip: ByteTrack players + Kalman puck, gap test
+  teams.py                   team colours: K-means on jersey colours, track vote, occupancy heatmaps
+  seed_summary.py            compares puck models over several training seeds (S1)
   make_puck_dataset.py       Roboflow export -> tiled dataset with a time-based train/val split
   train_puck.py              fine-tune YOLO26 on the puck tiles
   eval_puck.py               baseline vs fine-tuned on full frames: confusion matrix, AP50, examples
@@ -128,7 +131,7 @@ python scripts/propose_model.py --weights outputs/train/fillempje_yolo26s_puck_6
 ```
 
 ```bash
-python scripts/make_puck_dataset.py --export data/roboflow/<export-folder> --val-from-frame 4200 --detections outputs/baseline/fillempje_yolo26s_1280/detections.csv --skate-crops 4 --lookalike 56 400 --name fillempje_r2_tiles640
+python scripts/make_puck_dataset.py --export data/roboflow/<export-folder> --val-from-frame 4200 --detections outputs/baseline/fillempje_yolo26s_1280/detections.csv --skate-crops 4 --lookalike 56 400 --name fillempje_v3hn2_tiles640
 ```
 
 ```bash
@@ -139,11 +142,29 @@ python scripts/train_puck.py --data data/puck_tiles/fillempje_tiles640/data.yaml
 python scripts/eval_puck.py --finetuned outputs/train/fillempje_yolo26s_puck_640/weights/best.pt --frames data/puck_tiles/fillempje_tiles640/frames.csv --video Video/fillempje.mp4 --name fillempje
 ```
 
-4. Homography and minimap video for the whole clip:
+4. Homography and minimap video for the whole clip (add `--name fillempje_6pt` to keep the H3 run apart):
 
 ```bash
 python scripts/homography.py --video Video/fillempje.mp4 --keypoints configs/keypoints_fillempje.json --detections outputs/baseline/fillempje_yolo26s_1280/detections.csv --drift none
 ```
+
+5. Tracking over the whole clip, then team colours from the tracked boxes:
+
+```bash
+python scripts/track.py --video Video/fillempje.mp4 --keypoints configs/keypoints_fillempje.json --puck-weights outputs/train/fillempje_v3_yolo26s_puck_640/weights/best.pt --tracker configs/bytetrack_hockey.yaml --name fillempje_teams
+```
+
+```bash
+python scripts/teams.py --video Video/fillempje.mp4 --players outputs/track/fillempje_teams/players.csv --keypoints configs/keypoints_fillempje.json --names white other blue --score --name fillempje
+```
+
+6. Seed study (S1): train each variant with seeds 0, 1 and 2 (`--seed N --name seed_E2a_sN`), evaluate each with `eval_puck.py`, then:
+
+```bash
+python scripts/seed_summary.py --variant E2a seed_E2a_s0 seed_E2a_s1 seed_E2a_s2 --variant E2c seed_E2c_s0 seed_E2c_s1 seed_E2c_s2
+```
+
+Moving the project to another PC: the `data.yaml` files in `data/puck_tiles/*/` hold an absolute path. Change the `path:` line to your own folder, or rebuild the dataset with `make_puck_dataset.py`.
 
 ## Team conventions
 
