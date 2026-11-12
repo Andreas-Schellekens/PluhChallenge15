@@ -58,8 +58,7 @@ checks you did yourselves, and decisions made in team meetings).*
 - **Visual checks by the AI** (clip samples, grouping proposals) are not ground truth. A person
   should confirm them before they count as a result.
 - **Explanation.** A lot of code was generated in a short time. Every team member must be able
-  to explain it without AI on the oral exam. For that we made exam cards and go through the
-  parts together.
+  to explain it without AI on the oral exam. For that we go through the parts together.
 - **Data.** No personal data was sent to AI services beyond the match video frames. Videos,
   datasets and weights are not in git.
 

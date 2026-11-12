@@ -26,6 +26,7 @@ from rink import Minimap
 from teams import TrackVote, jersey_colour, nearest_centre  # noqa: F401 (TrackVote is re-exported for app.py)
 
 PERSON = 0
+TRACK_CONF = 0.1  # detector threshold while tracking: ByteTrack needs the low-confidence boxes too
 PLAYER_COL, OFF_ICE_COL, PUCK_COL = (0, 140, 255), (160, 160, 160), (0, 0, 0)  # BGR
 
 
@@ -68,8 +69,11 @@ def bottom_centres(boxes):
 def process_frame(frame, person_model, puck_model, mapper: RinkMapper, s: Settings, H_to_ref=None):
     extra = {}
     if s.track:  # persist=True: the tracker keeps its state between calls, so call it on consecutive frames
-        r = person_model.track(frame, persist=True, tracker=s.tracker, imgsz=s.person_imgsz, conf=s.person_conf,
-                               classes=[PERSON], verbose=False)[0]
+        # ByteTrack's second matching round uses boxes down to track_low_thresh (0.1) to keep a partly
+        # hidden player's track alive. A higher detector threshold would throw those boxes away before
+        # the tracker sees them, so we cap it at TRACK_CONF (the same 0.1 that track.py uses, T1).
+        r = person_model.track(frame, persist=True, tracker=s.tracker, imgsz=s.person_imgsz,
+                               conf=min(s.person_conf, TRACK_CONF), classes=[PERSON], verbose=False)[0]
         extra["ids"] = r.boxes.id.cpu().numpy().astype(int) if r.boxes.id is not None else np.full(len(r.boxes), -1)
     else:
         r = person_model.predict(frame, imgsz=s.person_imgsz, conf=s.person_conf, classes=[PERSON], verbose=False)[0]

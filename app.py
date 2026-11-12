@@ -103,7 +103,9 @@ sb.header("Players")
 s = Settings()
 s.person_imgsz = sb.select_slider("Person model input size", [640, 960, 1280, 1920], value=1280,
                                   help="Larger = small (far) players are found more often, but slower")
-s.person_conf = sb.slider("Person confidence", 0.05, 0.9, 0.25, 0.05)
+s.person_conf = sb.slider("Person confidence", 0.05, 0.9, 0.25, 0.05,
+                          help="Frame tab. With tracking on, the Clip tab uses at most 0.1: ByteTrack needs the "
+                               "low-confidence boxes to keep a partly hidden player's track")
 s.show_off_ice = sb.checkbox("Show people off the ice (grey)", False,
                              help="Spectators/bench: their feet map outside the rink outline")
 team_models = sorted(ROOT.glob("outputs/teams/*/model.json"))
@@ -224,7 +226,8 @@ with tab_clip:
         writer, rows = None, []
         # tracking keeps state between frames, so every clip run starts with a fresh tracker and filter
         clip_person_model = YOLO_fresh("yolo26s.pt") if s.track else person_model
-        kf = PuckKalman(**kal_params) if s.track else None
+        # inside: while predicting, a puck that leaves the rink ends the track (same rule as track.py, T2)
+        kf = PuckKalman(inside=lambda x, y: mapper.on_ice([(x, y)], s.rink_margin)[0], **kal_params) if s.track else None
         vote = TrackVote(len(team_names)) if s.track and team_names else None
         bar = st.progress(0.0)
         for i in range(first, last):

@@ -114,6 +114,7 @@ class Lens:
         r2 = (((pts - self.K[:2, 2]) / self.K[0, 0]) ** 2).sum(1)
         return r2 < 1 / (3 * -self.k1)
 
+
 class RinkMapper:
     """Everything needed to go between image pixels and rink coordinates."""
 

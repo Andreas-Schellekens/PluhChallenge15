@@ -827,3 +827,33 @@ so whether they are the same blade cases is still to be checked by a team member
 fewest false positives. When we quote its quality we give the seed mean (mAP@50 0.56,
 mAP@50:95 0.31) next to the single best run (0.634 / 0.382). The next gain has to come from
 labels (the blade rule, more val pucks), not from more hard negatives or more training runs.
+
+## R1 – Review of the 2026-11-11 round on a second machine, 2026-11-12
+
+**Goal:** before merging the review round, check its code and re-measure what can be re-measured
+on another machine (RTX 4060 Laptop, Ultralytics 8.4.178). Review by Claude Code, asked for by
+Andreas; the numbers below are from re-runs, not from reading the log.
+
+| entry | what was re-run | result |
+|---|---|---|
+| A1 | tile overlap E2a/E2b; `eval_E2b.log`; `metrics.json` of E2a | confirmed: 134 of 872 tiles shared; 6 false positives on null frames and 5 on puck frames; 0.634 / 0.382 |
+| H3 | `RinkMapper` on the 6-point config, and on the first 4 points | confirmed exactly: 7.6 / 5.1 / 5.1 / 2.8 / 5.0 / 4.2 px; far posts at x = 112.6 and 94.5 m with the 4-point fit; 37 / 13 / 75 / 31 px with the old fit direction |
+| T2, puck | `track.py ... --name fillempje_teams --redo` | confirmed: 17.9% → 41.6% (14.3 + 27.3), 66 gated, jumps 26 / 24 / 16, gap test 0.15 / 0.43 / 0.81 m against 0.39 / 0.65 / 0.97 m |
+| T2, players | same run | **differs:** 12.01 on the ice per frame, 232 IDs, 90 longer than 5 s, median life 3.94 s (logged: 11.85, 198, 90, 4.52 s) |
+| TM1 | `teams.py ... --names white other blue` on that run | cluster centres identical; 5.9 / 3.3 / 2.9 per frame; silhouette best at k = 3 (0.50); track agreement 85.3%; flips 2.87 → 0.48 per 100 |
+| TM1 sample (105/110), S1 | not re-run | the sample labels and the six seed runs are only on the other machine; S1 would take about 2.5 h of training |
+
+**Observation: the player-tracking numbers do not reproduce across machines.** The puck numbers
+are identical to the decimal, the player IDs are not (232 against 198). The code and the config
+are the same, so the difference comes from the person detector giving slightly different boxes on
+another GPU, and ByteTrack amplifying that: one box more or less at the matching threshold starts
+or ends a track. So "198 IDs" is good to about ±20%, and the T1 → T2 change in IDs (221 → 198) is
+inside that noise. The conclusion of T2 stands (tracks are fragmented, about 200 IDs for about 14
+people), the exact count does not.
+
+**Two small code changes in this review**
+- `pipeline.py`: with tracking on, the person detector runs at conf ≤ 0.1 (as `track.py` does).
+  The app used the sidebar value (0.25), so the low-confidence boxes that ByteTrack's second
+  matching round needs never reached the tracker.
+- `app.py`: the Clip tab now gives the Kalman filter the rink limit from T2 (`inside`); it was
+  only used in `track.py`.
