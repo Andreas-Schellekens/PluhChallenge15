@@ -1,6 +1,14 @@
 # Puck annotation
 
-Labelling rules, occlusion policy and split strategy for the `puck` class. **Status: draft from the pilot (10 frames), to be agreed by the team before labelling the rest.**
+Labelling rules, occlusion policy and split strategy for the `puck` class.
+
+**Status (2026-11-11).** The first part of this file is the pilot on the first clip (4K, kept as
+history). The dataset we train on is described under "Clip 2": 64 reviewed frames in two rounds.
+Still open, and to be done by the team itself (see the last section, "Open points"):
+1. the rules below were proposed by Claude Code and applied by one reviewer; the team has not
+   confirmed them yet;
+2. a puck touching the stick blade: label it or not;
+3. the consistency check between two labellers (rule 5) has not been done.
 
 ## Setup
 
@@ -259,3 +267,30 @@ labelled puck, so it is a guaranteed negative:
   Target reached: 64 reviewed frames, within 40–80.
 - **Open labelling question for the team:** a puck touching the blade, yes or no? Right now it
   is "no if unclear". That makes stick blades the most common false positive (E2).
+
+## Open points (checked 2026-11-11)
+
+What the assignment asks under "label consistency as a team" and what we have:
+
+| asked | status |
+|---|---|
+| labelling rules | written down (above), applied in both rounds, **not yet confirmed by the whole team** |
+| occlusion handling | rule: label when ≥ 50% of the puck is visible; hidden puck → frame marked null (23 frames). The same 50% rule cuts labels at tile edges (`make_puck_dataset.py`) |
+| consistency between labellers | **not measured.** Every label was reviewed by one person (Andreas). To do: a second team member labels the same 10 frames without seeing the first labels; compare with IoU and count the disagreements |
+| puck at the stick blade | **not decided.** In practice: not labelled when it is not clearly separate (6 rejected in round 2). This is the main false positive of every model in E2; S1 shows that extra hard negatives do not remove it |
+| train/val split | by time (frames ≥ 4200 = val), no frame or tile is in both (verified 2026-11-11) |
+
+**Two limits of the val set that follow from how it was built** (found in the audit, see
+`experiments.md`, A1 and S1):
+- 15 of the 25 val frames are null frames chosen *because the E1 model found nothing there*. E1
+  cannot make a false positive on them, so the val set flatters E1.
+- 5 of the 6 val pucks added in round 2 were proposed by E1 itself, so E1 finds them by
+  construction.
+
+A fair test set would be frames picked without any model: for example every 30th frame of a
+second clip, labelled by hand. With 40 or more such frames the comparison between models would
+stand on its own.
+
+**Dataset size.** 64 reviewed frames is inside the 40–80 the assignment asks, but only 41 of
+them contain a puck. The 23 null frames are useful (they are verified negatives), yet they do
+not teach the model what a puck looks like.

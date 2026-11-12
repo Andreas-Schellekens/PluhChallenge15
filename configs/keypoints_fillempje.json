@@ -8,6 +8,8 @@
     {"name": "end-zone dot, left", "image": [430, 578], "rink": [-20, -7]},
     {"name": "end-zone dot, right", "image": [1477, 530], "rink": [-20, 7]},
     {"name": "crease corner on goal line, left", "image": [630, 798], "rink": [-26, -1.83]},
-    {"name": "crease corner on goal line, right", "image": [1305, 778], "rink": [-26, 1.83]}
+    {"name": "crease corner on goal line, right", "image": [1305, 778], "rink": [-26, 1.83]},
+    {"name": "far goal post, left (base)", "image": [919, 400.5], "rink": [26, -0.915]},
+    {"name": "far goal post, right (base)", "image": [949.5, 400.5], "rink": [26, 0.915]}
   ]
 }

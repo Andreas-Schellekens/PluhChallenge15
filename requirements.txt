@@ -3,7 +3,7 @@
 # (use the CPU build if you have no NVIDIA GPU: drop --index-url)
 ultralytics>=8.4
 opencv-python>=4.10
-streamlit>=1.40
+streamlit>=1.50       # the app uses width="stretch"
 pandas>=2.0
 imageio-ffmpeg>=0.5
 lap>=0.5.12           # needed by the ByteTrack tracker (Ultralytics model.track)

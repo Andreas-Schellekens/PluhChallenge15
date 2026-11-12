@@ -6,6 +6,8 @@ Tabs
   Frame        pick any moment, change a parameter in the sidebar and see the
                effect on detection and mapping immediately
   Clip         process a time range into a side-by-side video (+ positions CSV)
+  Tracking     ByteTrack + Kalman results over the whole clip (T1)
+  Teams        jersey colour clustering and occupancy heatmaps (TM1)
   Puck model   baseline vs fine-tuned: metrics, confusion matrix, examples
   Homography   keypoints, reprojection error and the template drawn onto the
                reference frame, for the current lens setting
@@ -27,8 +29,9 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).parent / "scripts"))
 from homography import FrameMatcher, RinkMapper  # noqa: E402
 from kalman import PuckKalman  # noqa: E402
-from pipeline import Settings, draw, process_frame  # noqa: E402
+from pipeline import Settings, TrackVote, draw, process_frame  # noqa: E402
 from rink import Minimap  # noqa: E402
+from teams import load_model as load_team_model  # noqa: E402
 
 ROOT = Path(__file__).parent
 st.set_page_config(page_title="Hockey Vision", layout="wide")
@@ -76,9 +79,17 @@ def rgb(img):
 # ---------- sidebar: all parameters ----------
 sb = st.sidebar
 sb.title("Hockey Vision")
+upload = sb.file_uploader("Add a clip (.mp4)", type=["mp4"],
+                          help="Saved to Video/. A new camera position also needs its own keypoints config "
+                               "(configs/keypoints_<clip>.json): the homography is measured per camera.")
+if upload is not None:
+    (ROOT / "Video").mkdir(exist_ok=True)
+    target = ROOT / "Video" / Path(upload.name).name
+    if not target.exists():
+        target.write_bytes(upload.getbuffer())
 videos = sorted(str(p.relative_to(ROOT)) for p in (ROOT / "Video").glob("*.mp4"))
 if not videos:
-    st.error("No .mp4 in Video/. Put the clip there (see README).")
+    st.error("No .mp4 in Video/. Upload one in the sidebar or put the clip there (see README).")
     st.stop()
 video = sb.selectbox("Video", videos, index=next((i for i, v in enumerate(videos) if "fillempje" in v), 0))
 configs = sorted(str(p.relative_to(ROOT)) for p in (ROOT / "configs").glob("keypoints_*.json"))
@@ -92,14 +103,25 @@ sb.header("Players")
 s = Settings()
 s.person_imgsz = sb.select_slider("Person model input size", [640, 960, 1280, 1920], value=1280,
                                   help="Larger = small (far) players are found more often, but slower")
-s.person_conf = sb.slider("Person confidence", 0.05, 0.9, 0.25, 0.05)
+s.person_conf = sb.slider("Person confidence", 0.05, 0.9, 0.25, 0.05,
+                          help="Frame tab. With tracking on, the Clip tab uses at most 0.1: ByteTrack needs the "
+                               "low-confidence boxes to keep a partly hidden player's track")
 s.show_off_ice = sb.checkbox("Show people off the ice (grey)", False,
                              help="Spectators/bench: their feet map outside the rink outline")
+team_models = sorted(ROOT.glob("outputs/teams/*/model.json"))
+team_choice = sb.selectbox("Team colours", ["off"] + [p.parent.name for p in team_models],
+                           index=1 if team_models else 0,
+                           help="K-means on jersey colours (scripts/teams.py). Each dot gets the colour of its cluster.")
+team_names = []
+if team_choice != "off":
+    s.team_centres, s.team_scale, team_names, s.team_colours = load_team_model(team_models[[p.parent.name for p in team_models].index(team_choice)])
 
 sb.header("Puck")
 runs = sorted(ROOT.glob("outputs/train/*/weights/best.pt"))
 puck_options = ["fine-tuned: " + p.parent.parent.name for p in runs] + ["baseline: COCO sports ball", "off"]
-puck_choice = sb.selectbox("Puck detector", puck_options)
+# default: E2a, the best model in the experiment log (the list also holds older and seed runs)
+puck_choice = sb.selectbox("Puck detector", puck_options,
+                           index=next((i for i, p in enumerate(runs) if p.parent.parent.name == "fillempje_v3_yolo26s_puck_640"), 0))
 puck_model = None
 if puck_choice.startswith("fine-tuned"):
     s.puck_mode = "finetuned"
@@ -145,14 +167,22 @@ person_model = load_yolo("yolo26s.pt")
 info = video_info(str(ROOT / video))
 
 
+last_good = {"H": None, "failed": 0}
+
+
 def h_to_ref(frame):
     if drift == "static":
         return None
     H, inliers = frame_matcher(str(ROOT / video), cfg["reference_frame"]).to_reference(frame)
-    return H if H is not None and inliers >= 80 else None
+    if H is not None and inliers >= 80:
+        last_good["H"] = H
+    else:  # matching failed: reuse the last good homography (as scripts/homography.py does) and count it
+        last_good["failed"] += 1
+    return last_good["H"]
 
 
-tab_frame, tab_clip, tab_track, tab_eval, tab_hom = st.tabs(["Frame", "Clip", "Tracking", "Puck model", "Homography"])
+tab_frame, tab_clip, tab_track, tab_teams, tab_eval, tab_hom = st.tabs(
+    ["Frame", "Clip", "Tracking", "Teams", "Puck model", "Homography"])
 
 # ---------- Frame ----------
 with tab_frame:
@@ -174,9 +204,11 @@ with tab_frame:
         m2.metric("People off ice", int(len(res.on_ice) - sum(res.on_ice)))
         m3.metric("Puck", f"{res.puck_conf[0]:.2f}" if len(res.pucks) else "not found")
         if len(res.person_rink):
-            c2.dataframe(pd.DataFrame({"x": res.person_rink[:, 0].round(1), "y": res.person_rink[:, 1].round(1),
-                                       "conf": res.person_conf.round(2), "on ice": res.on_ice}),
-                         height=200, width="stretch")
+            table = pd.DataFrame({"x": res.person_rink[:, 0].round(1), "y": res.person_rink[:, 1].round(1),
+                                  "conf": res.person_conf.round(2), "on ice": res.on_ice})
+            if "teams" in res.extra:
+                table["team"] = [team_names[t] if t >= 0 else "?" for t in res.extra["teams"]]
+            c2.dataframe(table, height=200, width="stretch")
 
 # ---------- Clip ----------
 with tab_clip:
@@ -194,7 +226,9 @@ with tab_clip:
         writer, rows = None, []
         # tracking keeps state between frames, so every clip run starts with a fresh tracker and filter
         clip_person_model = YOLO_fresh("yolo26s.pt") if s.track else person_model
-        kf = PuckKalman(**kal_params) if s.track else None
+        # inside: while predicting, a puck that leaves the rink ends the track (same rule as track.py, T2)
+        kf = PuckKalman(inside=lambda x, y: mapper.on_ice([(x, y)], s.rink_margin)[0], **kal_params) if s.track else None
+        vote = TrackVote(len(team_names)) if s.track and team_names else None
         bar = st.progress(0.0)
         for i in range(first, last):
             if not cap.grab():
@@ -204,6 +238,8 @@ with tab_clip:
             frame = cap.retrieve()[1]
             H = h_to_ref(frame)
             res = process_frame(frame, clip_person_model, puck_model, mapper, s, H)
+            if vote is not None:  # a track is one person: use the majority colour of the track so far
+                res.extra["teams"] = vote.update(res.extra["ids"], res.extra["teams"])
             if kf is not None:
                 x, y, state, _ = kf.step(stride / info["fps"], res.extra["puck_candidates"])
                 res.extra["kalman"] = (x, y, state)
@@ -220,9 +256,11 @@ with tab_clip:
                 writer.send(None)
             writer.send(np.ascontiguousarray(rgb(canvas)))
             ids = res.extra.get("ids", [-1] * len(res.person_rink))
-            for xy, c, ice, tid in zip(res.person_rink, res.person_conf, res.on_ice, ids):
+            tms = res.extra.get("teams", [-1] * len(res.person_rink))
+            for xy, c, ice, tid, tm in zip(res.person_rink, res.person_conf, res.on_ice, ids, tms):
                 rows.append({"frame": i, "time_s": round(i / info["fps"], 3), "type": "person", "id": int(tid),
-                             "x": round(xy[0], 2), "y": round(xy[1], 2), "conf": round(float(c), 3), "on_ice": ice})
+                             "x": round(xy[0], 2), "y": round(xy[1], 2), "conf": round(float(c), 3), "on_ice": ice,
+                             "team": team_names[tm] if tm >= 0 else ""})
             for xy, c in zip(res.puck_rink, res.puck_conf):
                 rows.append({"frame": i, "time_s": round(i / info["fps"], 3), "type": "puck", "id": -1,
                              "x": round(xy[0], 2), "y": round(xy[1], 2), "conf": round(float(c), 3), "on_ice": True,
@@ -239,7 +277,13 @@ with tab_clip:
         pk = df[df["type"] == "puck"]
         c1, c2 = st.columns(2)
         c1.metric("Players on ice per frame", f"{(df[df['type'] == 'person']['on_ice']).sum() / max(n, 1):.1f}")
-        c2.metric("Frames with puck", f"{pk['frame'].nunique()} / {n}")
+        if "state" in pk and (pk["state"] == "predicted").any():  # tracked: say how many are only predicted
+            c2.metric("Frames with puck", f"{pk['frame'].nunique()} / {n}",
+                      f"{int((pk['state'] == 'predicted').sum())} of them predicted by the Kalman filter", delta_color="off")
+        else:
+            c2.metric("Frames with puck", f"{pk['frame'].nunique()} / {n}")
+        if last_good["failed"]:
+            st.warning(f"Camera matching failed on {last_good['failed']} frames; the last good homography was reused.")
         st.download_button("Download positions CSV", df.to_csv(index=False), "positions.csv", "text/csv")
 
 # ---------- Tracking ----------
@@ -264,6 +308,31 @@ with tab_track:
             st.video(str(run_t.parent / "minimap_compare.mp4"))
         st.caption(f"Kalman settings of this run: {sm['kalman_params']}")
 
+# ---------- Teams ----------
+with tab_teams:
+    runs_tm = sorted((ROOT / "outputs/teams").glob("*/summary.json"))
+    if not runs_tm:
+        st.info("No team clustering yet. Run scripts/teams.py (see docs/experiments.md, TM1).")
+    else:
+        run_tm = st.selectbox("Team clustering run (whole clip)", runs_tm, format_func=lambda p: p.parent.name)
+        sm = json.loads(run_tm.read_text())
+        tc = sm["track_consistency"]
+        cols = st.columns(len(sm["clusters"]) + 1)
+        for col, cl in zip(cols, sm["clusters"]):
+            col.metric(f"{cl['name']} (Lab {cl['lab']})", f"{cl['per_frame_after_vote']} per frame",
+                       f"{cl['share_after_track_vote_pct']}% of detections", delta_color="off")
+        flips = tc["colour_flips_per_100_detections"]
+        cols[-1].metric("Colour flips per 100 detections", flips["after_window_vote"],
+                        f"{flips['per_detection']} without the track vote", delta_color="off")
+        st.subheader("How many colour groups? (K-means for k = 2..5)")
+        st.dataframe(pd.DataFrame(sm["k_selection"]), width="stretch")
+        if "sample_check" in sm:
+            st.subheader("Random sample checked by hand")
+            st.json(sm["sample_check"])
+        for img in ("heatmaps.jpg", "colours.png", "k_selection.png", *sorted(p.name for p in run_tm.parent.glob("sheet_*.jpg"))):
+            if (run_tm.parent / img).exists():
+                st.image(str(run_tm.parent / img), caption=img, width="stretch")
+
 # ---------- Puck model ----------
 with tab_eval:
     evals = sorted((ROOT / "outputs/eval_puck").glob("*/metrics.json"))
@@ -285,11 +354,15 @@ with tab_hom:
     st.dataframe(pd.DataFrame({"keypoint": [p["name"] for p in cfg["points"]],
                                "image (px)": [str(p["image"]) for p in cfg["points"]],
                                "rink": [str(p["rink"]) for p in cfg["points"]],
-                               f"reprojection error ({mapper.spec.unit})": errs.round(3)}),
+                               f"reprojection error ({mapper.spec.unit})": errs.round(3),
+                               "reprojection error (px)": mapper.keypoint_errors_px().round(1)}),
                  width="stretch")
     if len(cfg["points"]) == 4:
         st.caption("4 points = exactly the 8 unknowns of a homography, so the error is always 0. "
                    "Check the overlay instead: lines that were NOT used for the fit must match.")
+    else:
+        st.caption("More than 4 points: the fit minimises the error in pixels. The same few pixels are "
+                   "centimetres next to the camera and metres at the far end of the rink.")
     ref = read_frame(str(ROOT / video), cfg["reference_frame"])
     if ref is not None:
         mapper.draw_template(ref, thickness=2)
