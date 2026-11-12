@@ -136,6 +136,7 @@ class RinkMapper:
             H_inv = -H_inv  # same homography, but now w > 0 for points in front of the camera
         self.H_ref_inv = H_inv
         self.H_ref = np.linalg.inv(H_inv)
+        self._template_cache = {}  # projected rink markings per output size (see draw_template)
 
     def keypoint_errors(self):
         """Reprojection error per keypoint in rink units (how far the measured pixel lands
@@ -178,10 +179,11 @@ class RinkMapper:
         boards = boards_polyline(self.spec).astype(np.float32)
         return [cv2.pointPolygonTest(boards, (float(x), float(y)), True) >= -margin for x, y in rink_xy]
 
-    def draw_template(self, img, H_to_ref=None, scale=1.0, thickness=2):
-        """Draw the rink markings onto a video frame. This is the visual check of
-        the mapping: a wrong homography = lines next to the real markings."""
-        h, w = img.shape[:2]
+    def template_lines(self, H_to_ref, scale, limit):
+        """The rink markings as image polylines: a list of (colour, [N x 2 int32 arrays]).
+        A marking is cut where it goes behind the camera, outside the lens model or further
+        than `limit` pixels from the image, so one marking can give several pieces."""
+        lines = []
         for pts, col, closed in markings(self.spec):
             if closed:
                 pts = np.vstack([pts, pts[:1]])
@@ -190,9 +192,29 @@ class RinkMapper:
                                    + [pts[-1:]])
             xy, ok = self.rink_to_image(dense, H_to_ref)
             xy = xy * scale
-            for a, b, oa, ob in zip(xy[:-1], xy[1:], ok[:-1], ok[1:]):
-                if oa and ob and np.abs(a).max() < 4 * max(w, h) and np.abs(b).max() < 4 * max(w, h):
-                    cv2.line(img, tuple(np.int32(a)), tuple(np.int32(b)), col, thickness, cv2.LINE_AA)
+            ok = ok & (np.abs(xy).max(axis=1) < limit)
+            # runs of consecutive drawable points: `edges` holds where ok switches on and off
+            edges = np.flatnonzero(np.diff(np.concatenate([[False], ok, [False]]).astype(int)))
+            pieces = [np.int32(xy[a:b]) for a, b in zip(edges[::2], edges[1::2]) if b - a > 1]
+            lines.append((col, pieces))
+        return lines
+
+    def draw_template(self, img, H_to_ref=None, scale=1.0, thickness=2):
+        """Draw the rink markings onto a video frame. This is the visual check of
+        the mapping: a wrong homography = lines next to the real markings."""
+        h, w = img.shape[:2]
+        if H_to_ref is None:
+            # static camera: the lines are the same in every frame, so project them only once.
+            # (Projecting them again for each frame took as long as running both detectors.)
+            key = (scale, w, h)
+            if key not in self._template_cache:
+                self._template_cache[key] = self.template_lines(None, scale, 4 * max(w, h))
+            lines = self._template_cache[key]
+        else:
+            lines = self.template_lines(H_to_ref, scale, 4 * max(w, h))
+        for col, pieces in lines:
+            if pieces:
+                cv2.polylines(img, pieces, False, col, thickness, cv2.LINE_AA)
 
 
 def read_frame(cap, idx):

@@ -181,6 +181,16 @@ def h_to_ref(frame):
     return last_good["H"]
 
 
+def legend():
+    """One line under the minimap that says what the symbols mean, for the current settings."""
+    parts = ["dot = person on the ice (foot point)", "double ring = box cut off by the bottom of the frame, position unreliable"]
+    if team_names:
+        parts.append("dot colour = jersey colour group (" + " / ".join(team_names) + ")")
+    if s.puck_mode != "off":
+        parts.append("black dot = puck" + (", black ring = puck predicted by the Kalman filter (Clip tab)" if s.track else ""))
+    return "Minimap: " + "; ".join(parts) + "."
+
+
 tab_frame, tab_clip, tab_track, tab_teams, tab_eval, tab_hom = st.tabs(
     ["Frame", "Clip", "Tracking", "Teams", "Puck model", "Homography"])
 
@@ -199,6 +209,7 @@ with tab_frame:
         c1, c2 = st.columns([3, 2])
         c1.image(rgb(view), caption=f"frame {idx}", width="stretch")
         c2.image(rgb(mm), caption="tactical minimap", width="stretch")
+        c2.caption(legend())
         m1, m2, m3 = c2.columns(3)
         m1.metric("Players on ice", int(sum(res.on_ice)))
         m2.metric("People off ice", int(len(res.on_ice) - sum(res.on_ice)))
@@ -257,10 +268,10 @@ with tab_clip:
             writer.send(np.ascontiguousarray(rgb(canvas)))
             ids = res.extra.get("ids", [-1] * len(res.person_rink))
             tms = res.extra.get("teams", [-1] * len(res.person_rink))
-            for xy, c, ice, tid, tm in zip(res.person_rink, res.person_conf, res.on_ice, ids, tms):
+            for xy, c, ice, tid, tm, is_cut in zip(res.person_rink, res.person_conf, res.on_ice, ids, tms, res.extra["cut"]):
                 rows.append({"frame": i, "time_s": round(i / info["fps"], 3), "type": "person", "id": int(tid),
                              "x": round(xy[0], 2), "y": round(xy[1], 2), "conf": round(float(c), 3), "on_ice": ice,
-                             "team": team_names[tm] if tm >= 0 else ""})
+                             "team": team_names[tm] if tm >= 0 else "", "feet_in_frame": not is_cut})
             for xy, c in zip(res.puck_rink, res.puck_conf):
                 rows.append({"frame": i, "time_s": round(i / info["fps"], 3), "type": "puck", "id": -1,
                              "x": round(xy[0], 2), "y": round(xy[1], 2), "conf": round(float(c), 3), "on_ice": True,
@@ -273,10 +284,15 @@ with tab_clip:
     if "clip" in st.session_state:
         path, df = st.session_state["clip"]
         st.video(path)
+        st.caption(legend())
         n = df["frame"].nunique()
         pk = df[df["type"] == "puck"]
         c1, c2 = st.columns(2)
-        c1.metric("Players on ice per frame", f"{(df[df['type'] == 'person']['on_ice']).sum() / max(n, 1):.1f}")
+        on_ice_df = df[(df["type"] == "person") & df["on_ice"]]
+        # with team colours: split the count per colour group ("other" = bystanders at the boards, TM1)
+        per_team = on_ice_df[on_ice_df["team"] != ""].groupby("team").size() / max(n, 1)
+        c1.metric("People on ice per frame", f"{len(on_ice_df) / max(n, 1):.1f}",
+                  " / ".join(f"{name} {v:.1f}" for name, v in per_team.items()) or None, delta_color="off")
         if "state" in pk and (pk["state"] == "predicted").any():  # tracked: say how many are only predicted
             c2.metric("Frames with puck", f"{pk['frame'].nunique()} / {n}",
                       f"{int((pk['state'] == 'predicted').sum())} of them predicted by the Kalman filter", delta_color="off")

@@ -857,3 +857,19 @@ people), the exact count does not.
   matching round needs never reached the tracker.
 - `app.py`: the Clip tab now gives the Kalman filter the rink limit from T2 (`inside`); it was
   only used in `track.py`.
+
+**App changes after testing the Clip tab (2026-11-12, same machine).** Processing 10 s of the
+clip (300 frames, tracking and team colours on) worked without errors: 10.9 people on the ice per
+frame, puck shown in 95 of 300 frames (58 of them predicted).
+- **Drawing the rink template took as long as both detectors.** Timed per frame: detection +
+  mapping 112 ms, drawing 105 ms. `draw_template` projected every line piece of the template
+  again for every frame, with one `cv2.line` call per piece. Now the markings are projected once per output size
+  when the camera is static (`RinkMapper.template_lines`, cached) and drawn as polylines:
+  drawing 105 → 15 ms per frame. With thickness 1 (the app) the image is pixel-identical to
+  before; with thickness 2 the line joins differ slightly.
+- **Players cut off by the bottom of the frame are flagged.** Their box ends at the knees, so
+  the foot point is wrong (H2, f2820). Boxes ending within 8 px of the bottom edge get a second
+  ring on the minimap and `feet_in_frame = False` in the positions CSV. In 50 sampled frames the
+  cut boxes end at y = 1075–1078 (of 1080); real feet near the edge ended at 1043 and 1057.
+  The position itself is not corrected.
+- A legend under the minimap, and the people count split per colour group.

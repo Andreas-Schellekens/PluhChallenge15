@@ -26,6 +26,9 @@ from rink import Minimap
 from teams import TrackVote, jersey_colour, nearest_centre  # noqa: F401 (TrackVote is re-exported for app.py)
 
 PERSON = 0
+# A person box that ends this close to the bottom of the frame is cut off by it. YOLO stops such
+# boxes 2-5 px short of the border (measured on fillempje: they end at y = 1075-1078 of 1080).
+EDGE_PX = 8
 TRACK_CONF = 0.1  # detector threshold while tracking: ByteTrack needs the low-confidence boxes too
 PLAYER_COL, OFF_ICE_COL, PUCK_COL = (0, 140, 255), (160, 160, 160), (0, 0, 0)  # BGR
 
@@ -103,6 +106,11 @@ def process_frame(frame, person_model, puck_model, mapper: RinkMapper, s: Settin
     person_rink = mapper.image_to_rink(bottom_centres(persons), H_to_ref) if len(persons) else np.zeros((0, 2))
     puck_rink = mapper.image_to_rink(bottom_centres(pucks), H_to_ref) if len(pucks) else np.zeros((0, 2))
     on_ice = mapper.on_ice(person_rink, s.rink_margin)
+    # A player next to the camera is cut off by the bottom of the frame: the box then ends at the
+    # knees or hips, not at the skates, so the "foot point" is too high in the image and the
+    # player lands too far from the camera on the rink (H2, f2820). We cannot repair the
+    # position, but we can flag it: draw() puts a second ring around these dots.
+    extra["cut"] = persons[:, 3] >= frame.shape[0] - EDGE_PX if len(persons) else np.zeros(0, bool)
     return FrameResult(persons, pconf, person_rink, on_ice, pucks, kconf, puck_rink, extra)
 
 
@@ -116,7 +124,8 @@ def draw(frame, res: FrameResult, mapper: RinkMapper, minimap: Minimap, s: Setti
 
     ids = res.extra.get("ids", [-1] * len(res.persons))
     teams = res.extra.get("teams", [-1] * len(res.persons))
-    for box, c, xy, ice, tid, team in zip(res.persons, res.person_conf, res.person_rink, res.on_ice, ids, teams):
+    cut = res.extra.get("cut", [False] * len(res.persons))
+    for box, c, xy, ice, tid, team, is_cut in zip(res.persons, res.person_conf, res.person_rink, res.on_ice, ids, teams, cut):
         if not ice and not s.show_off_ice:
             continue
         player_col = s.team_colours[team] if team >= 0 else PLAYER_COL
@@ -130,6 +139,8 @@ def draw(frame, res: FrameResult, mapper: RinkMapper, minimap: Minimap, s: Setti
             p = tuple(int(v) for v in minimap.to_px(xy)[0])
             cv2.circle(mm, p, 7, player_col, -1, cv2.LINE_AA)
             cv2.circle(mm, p, 7, (60, 60, 60), 1, cv2.LINE_AA)  # outline: a white jersey on white ice
+            if is_cut:  # feet outside the frame: the position is only a guess, so a second ring
+                cv2.circle(mm, p, 12, (60, 60, 60), 1, cv2.LINE_AA)
             if tid >= 0:
                 cv2.putText(mm, str(tid), (p[0] + 8, p[1] - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (30, 30, 30), 1)
 
