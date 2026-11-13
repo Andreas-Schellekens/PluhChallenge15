@@ -89,7 +89,11 @@ def read_context(cap, centre, n):
 
 def show_context(frames, centre, size):
     """Context window: step or play through the neighbouring frames, optionally zoomed on one spot.
-    `size` is (w, h) of the labelled frame, to map a click to the clip if its resolution differs."""
+    `size` is (w, h) of the labelled frame; a warning is printed if the clip has another resolution
+    (then the frame number in the file name probably does not belong to this clip either)."""
+    if not frames:
+        print(f"frame {centre} is not in the clip: is --video the clip these frames come from?")
+        return
     pos = next((i for i, (idx, _) in enumerate(frames) if idx == centre), len(frames) // 2)
     state = {"zoom": None}        # zoom centre in clip pixels, or None for the whole frame
     playing = False

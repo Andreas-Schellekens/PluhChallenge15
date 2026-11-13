@@ -186,16 +186,22 @@ python scripts/label_agreement.py pick --export data/roboflow/pluhchallenge_v3 -
 The second labeller labels them with the rules of `annotation.md`, without looking at the team dataset. Locally, with no change to the Roboflow project (click the puck, drag a tight box in the zoom window, the tool adds the 2 px margin of rule 1; `v` = the ±10 neighbouring frames of rule 3, `n` = no puck, `u` = unsure, `q` = stop and continue later):
 
 ```bash
-python scripts/label_blind.py --frames data/consistency/round1 --labeller zjef --video Video/fillempje.mp4
+python scripts/label_blind.py --frames data/consistency/round1 --labeller zjef
 ```
 
-Round 2 (agreed 2026-11-13, on Roboflow v4 and 10 new frames): see the commands under "Decisions after round 1" in [`docs/annotation.md`](docs/annotation.md).
+(That is how round 1 was run. From round 2 on, add `--video Video/fillempje.mp4`.)
+
+```bash
+python scripts/label_blind.py --frames data/consistency/round2 --labeller <name> --video Video/fillempje.mp4
+```
 
 (Or upload the frames to a separate Roboflow project and export in YOLOv8 format.) Then:
 
 ```bash
 python scripts/label_agreement.py compare --a data/roboflow/pluhchallenge_v3 --b data/roboflow/consistency_zjef --name round1
 ```
+
+Round 2 (agreed 2026-11-13, on Roboflow v4 and 10 new frames): the full `pick` / `label_blind` / `compare` commands are under "Decisions after round 1" in [`docs/annotation.md`](docs/annotation.md).
 
 Moving the project to another PC: the `data.yaml` files in `data/puck_tiles/*/` hold an absolute path. Change the `path:` line to your own folder, or rebuild the dataset with `make_puck_dataset.py`. Rebuilding from the Roboflow v3 export (YOLOv8 format) gives exactly the same tiles: E2a's `best.pt` validates at the logged 0.634 / 0.382 on them (checked 2026-11-13).
 
