@@ -47,6 +47,7 @@ scripts/
   eval_puck.py               baseline vs fine-tuned on full frames: confusion matrix, AP50, examples
   sweep_conf_nms.py          confidence threshold + tile/merge NMS sweep, FP types, crop sheet of every error
   label_agreement.py         consistency check between two labellers: pick blind frames, compare with IoU
+  label_blind.py             label those frames locally (click + zoom + drag), without seeing the team labels
   homography.py              image -> rink mapping (lens correction, homography, camera motion), minimap video
   pipeline.py                per-frame glue used by the app: detect -> map -> draw
   rink.py                    NHL (ft) and IIHF (m) rink templates and minimap drawing
@@ -181,10 +182,16 @@ python scripts/sweep_conf_nms.py --weights outputs/train/fillempje_v3_yolo26s_pu
 python scripts/label_agreement.py pick --export data/roboflow/pluhchallenge_v3 --n 10 --exclude 4290 4500 4590 4950 5070 --name round1
 ```
 
-The second labeller uploads `data/consistency/round1/*.jpg` to a separate Roboflow project (so the first labels are not visible), labels them with the rules of `annotation.md` without looking at the team dataset, and exports in YOLOv8 format. Then:
+The second labeller labels them with the rules of `annotation.md`, without looking at the team dataset. Locally, with no change to the Roboflow project (click the puck, drag a box in the zoom window; `n` = no puck, `u` = unsure, `q` = stop and continue later):
 
 ```bash
-python scripts/label_agreement.py compare --a data/roboflow/pluhchallenge_v3 --b data/roboflow/<second-labeller-export> --name round1
+python scripts/label_blind.py --frames data/consistency/round1 --labeller zjef
+```
+
+(Or upload the frames to a separate Roboflow project and export in YOLOv8 format.) Then:
+
+```bash
+python scripts/label_agreement.py compare --a data/roboflow/pluhchallenge_v3 --b data/roboflow/consistency_zjef --name round1
 ```
 
 Moving the project to another PC: the `data.yaml` files in `data/puck_tiles/*/` hold an absolute path. Change the `path:` line to your own folder, or rebuild the dataset with `make_puck_dataset.py`. Rebuilding from the Roboflow v3 export (YOLOv8 format) gives exactly the same tiles: E2a's `best.pt` validates at the logged 0.634 / 0.382 on them (checked 2026-11-13).
