@@ -34,6 +34,8 @@ team.** Check it against the course GenAI policy for any required format or word
 | Conf/NMS sweep and error analysis (P1, 2026-11-13) | wrote `sweep_conf_nms.py`, `docs/error_analysis.md` and the P1 entry; ran the sweep; typed the five E2a errors first from the crops. The error types quoted from other runs (E1, E2b) are Claude's visual checks, not yet confirmed by a team member | **Zjef checked the five E2a error types on enlarged crops**; the conclusion that the val "puck" at f5070 is a stick blade is his. To do: fix the f5070 label in Roboflow (v4); a second person looks at f4950 |
 | Consistency check, round 1 (2026-11-13) | wrote `label_agreement.py` and `label_blind.py`; described what the disagreement frames show (not yet checked by Andreas) | **Zjef labelled the 10 frames blind**; his reasons for the disagreements are his own answers. The proposed rules (blade rule, ±10 frames check, box margin) are not decided yet |
 
+| Labelling decisions after round 1 (2026-11-13) | added the ±10 frames view (`--video`, key `v`) and the automatic 2 px margin (`--margin`) to `label_blind.py`; wrote the decisions and the round-2 commands into `annotation.md`; tested the new functions on a synthetic video only (not yet with the real clip) | **Finn decided**: 2 px margin and ±10 frames check adopted, no blade rule for now, a second round agreed; Finn fixed f5070 in Roboflow |
+
 *Team: complete this table with your own contributions (for example Mihai's part, extra
 checks you did yourselves, and decisions made in team meetings).*
 

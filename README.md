@@ -17,7 +17,7 @@ Main clip since 2026-10-30: `Video/fillempje.mp4` (static camera behind the goal
 | Part | Status |
 |---|---|
 | Pretrained baseline (E0, E0-B) | Done: players OK, puck in only 10/2548 frames (high precision, almost no recall). See [`docs/experiments.md`](docs/experiments.md) |
-| Puck annotation (40–80 frames) | 64 human-reviewed frames: 41 with a puck + 23 verified without (2 rounds). See [`docs/annotation.md`](docs/annotation.md). Consistency check (2026-11-13, 10 frames, blind second labeller): low agreement, mostly the blade question. Open: team-wide labelling rule for a puck at the stick blade, box margin, second check round |
+| Puck annotation (40–80 frames) | 64 human-reviewed frames: 41 with a puck + 23 verified without (2 rounds). See [`docs/annotation.md`](docs/annotation.md). Consistency check (2026-11-13, 10 frames, blind second labeller): low agreement, mostly the blade question. Decided 2026-11-13 (Finn): box margin 2 px, ±10 frames check always; blade rule not taken up for now. Open: second check round on Roboflow v4 |
 | Puck fine-tuning + mAP@50 / mAP@50:95 | Done (E1, E2a, E2b, seed study S1). Best: E2a, tile val mAP@50 0.634 / mAP@50:95 0.382 for the run we use; over 3 seeds the same recipe gives 0.56 ± 0.06 / 0.31 ± 0.01. Full frames: recall 0/10 → 6/10 (in every seed) with 1 to 4 false positives, AP@50 0.01 → 0.65 (seed mean 0.59) vs baseline. Hard negatives gave no gain (S1) |
 | Homography + rink minimap | Done (H3): lens correction + 6 keypoints fitted in pixels, IIHF template. Near the camera good to decimetres, beyond the centre line only to several metres |
 | Streamlit dashboard | Done: `streamlit run app.py`, all parameters adjustable, clips can be added from the sidebar |
@@ -183,11 +183,13 @@ python scripts/sweep_conf_nms.py --weights outputs/train/fillempje_v3_yolo26s_pu
 python scripts/label_agreement.py pick --export data/roboflow/pluhchallenge_v3 --n 10 --exclude 4290 4500 4590 4950 5070 --name round1
 ```
 
-The second labeller labels them with the rules of `annotation.md`, without looking at the team dataset. Locally, with no change to the Roboflow project (click the puck, drag a box in the zoom window; `n` = no puck, `u` = unsure, `q` = stop and continue later):
+The second labeller labels them with the rules of `annotation.md`, without looking at the team dataset. Locally, with no change to the Roboflow project (click the puck, drag a tight box in the zoom window, the tool adds the 2 px margin of rule 1; `v` = the ±10 neighbouring frames of rule 3, `n` = no puck, `u` = unsure, `q` = stop and continue later):
 
 ```bash
-python scripts/label_blind.py --frames data/consistency/round1 --labeller zjef
+python scripts/label_blind.py --frames data/consistency/round1 --labeller zjef --video Video/fillempje.mp4
 ```
+
+Round 2 (agreed 2026-11-13, on Roboflow v4 and 10 new frames): see the commands under "Decisions after round 1" in [`docs/annotation.md`](docs/annotation.md).
 
 (Or upload the frames to a separate Roboflow project and export in YOLOv8 format.) Then:
 

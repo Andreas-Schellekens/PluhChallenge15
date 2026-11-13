@@ -26,8 +26,9 @@ Done and logged: baseline (E0, E0-B), 64 reviewed frames in two rounds, fine-tun
 Experiment IDs: E = puck detector, H = homography, T = tracking, TM = teams, S = seed study, A = audit, P = post-processing (conf/NMS) and error analysis.
 
 Open, and to be done by the team (not by an AI):
-- Decide the labelling rule for a puck touching the stick blade, then relabel and retrain. It is the main false positive of every model.
-- Consistency check: round 1 done 2026-11-13 (Zjef labelled 10 frames blind; same puck in 0 of the 7 frames where either labeller saw one, presence agreement 5/10, mostly the blade question; see `docs/annotation.md`, "Consistency check, round 1"). Still open: decide the proposed rules there (blade rule, ±10 frames check, box margin), then a second round on 10 new frames, ideally with a third person.
+- Labelling rule for a puck touching the stick blade: not taken up for now (Finn, 2026-11-13). It remains the main false positive of every model.
+- Consistency check: round 1 done 2026-11-13 (Zjef labelled 10 frames blind; same puck in 0 of the 7 frames where either labeller saw one, presence agreement 5/10, mostly the blade question). Decided after it (Finn, 2026-11-13): box margin 2 px and the ±10 frames check always; `label_blind.py` applies both (`--margin`, `--video` + key `v`). Still open: round 2 on 10 new frames from Roboflow v4, ideally with a third person (commands in `docs/annotation.md`, "Decisions after round 1").
+- f5070 is fixed in Roboflow (Finn, 2026-11-13). Still open: export v4, rebuild the tiles, rerun `eval_puck.py` and `sweep_conf_nms.py`.
 - A test set chosen without any model (the val set was partly built with E1, see A1).
 - A team member confirms the visual checks that Claude Code did (clip samples in E1/E2, the 110-crop team sample in TM1).
 - Complete `docs/genai.md`: own contributions and the statement.
