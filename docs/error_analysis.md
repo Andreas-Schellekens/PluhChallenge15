@@ -6,9 +6,10 @@ settings (confidence threshold, NMS) are measured first, so that we know which e
 threshold problem and which are a model or data problem.
 
 **Status (2026-11-13).** Drafted by Claude Code. The numbers come from a saved run
-(`outputs/sweep/E2a_val/`, command below). **The type of each error (blade, blur, far, ...) is a
-visual judgement by Claude and has not been confirmed by a team member yet.** To confirm: open
-`outputs/sweep/E2a_val/errors.jpg` and fill in the `category` column of `errors.csv`.
+(`outputs/sweep/E2a_val/`, command below). **The 5 errors at the operating point were checked by
+Zjef** on enlarged crops (`errors_context.jpg`); his verdicts are in `errors.csv` (`category`,
+`checked_by`, `note`) and in "Team check" below. One of them turned out to be a labelling error
+(f5070). The error types quoted from other runs (E1, E2b) are still Claude's visual checks.
 
 ## Setup
 
@@ -81,7 +82,9 @@ The number of found pucks is 6 in every cell: NMS never removed a correct detect
    It would matter for the player detector (crowded scenes, slide 38 type 8).
 3. **The confidence threshold cannot fix the missed pucks.** Between conf 0.05 and 0.25 the result
    is identical: the 4 missed pucks get **no box at all** with a score ≥ 0.05. They are a model or
-   data problem (part 2), not a threshold problem.
+   data problem (part 2), not a threshold problem. One nuance, found in the team check: at f4590
+   the model does put a box on the puck (IoU 0.58), but with a score of only 0.044. Lowering conf
+   that far would also let through every other weak blob, so it is not a fix either.
 4. **Raising the threshold costs more than it gains.** At conf 0.40 the one false positive
    (score 0.39) disappears, but 3 of the 6 found pucks have a score between 0.25 and 0.40 and are
    lost too. Conf 0.25 sits at the knee of the curve: the highest F1 (0.71) with the highest
@@ -95,32 +98,60 @@ The number of found pucks is 6 in every cell: NMS never removed a correct detect
 ## Part 2: the errors, by type (slide 38)
 
 At the operating point E2a makes 5 errors on the val frames: 1 false positive and 4 missed pucks
-(`errors.csv`, `errors.jpg`). Error types that only appear in other runs of the log are added with
-their source.
+(`errors.csv`, `errors.jpg`, enlarged in `errors_context.jpg`).
 
-| # | slide 38 type | where we see it | count | likely cause (link to annotation or design) |
+### Team check (Zjef, 2026-11-13)
+
+Claude first typed the errors from the crops; Zjef then judged the enlarged crops himself.
+
+| # | frame | error | Claude's type | Zjef's verdict | extra evidence |
+|---|---|---|---|---|---|
+| 1 | f4290 | FP, conf 0.39 | stick blade | **stick blade** | – |
+| 2 | f4500 | missed | small object (6×6 px) | **puck, motion-blurred** | both apply: tiny *and* soft |
+| 3 | f4590 | missed | puck touching the blade | **puck; "the model didn't miss it"** | correct: the model has a box on it (IoU 0.58) with conf 0.044, far below 0.25 |
+| 4 | f4950 | missed | blurred puck in the air, crowded | **can't tell** | – |
+| 5 | f5070 | missed | streaked puck along the boards | **stick blade, not a puck** | `f5070_sequence.jpg` (f5058–f5082): the dark streak stays still at the end of a player's stick for 0.4 s; a puck would move |
+
+**f5070 is a labelling error.** The val label is on a stick blade, so the model was right to
+find nothing there. Two consequences:
+- E2a's real val recall is probably 6/9 instead of 6/10. We do not change the logged numbers
+  until the label is fixed in Roboflow (to do below), because the dataset is the team's.
+- It is the mirror image of the blade problem in training: there, pucks *at* a blade were
+  rejected; here, a blade *without* a puck was accepted. Both show that "puck or blade?" is the
+  hardest call for us as labellers too, which is why the consistency check between two labellers
+  matters (`annotation.md`, rule 5). E1, E2a and E2b all put no box on it (checked down to conf
+  0.01), so this label has been counted as a miss against all three.
+
+### By type (slide 38)
+
+Error types that only appear in other runs of the log are added with their source; those are
+Claude's visual checks, not confirmed.
+
+| # | slide 38 type | where we see it | count (E2a, val) | likely cause (link to annotation or design) |
 |---|---|---|---|---|
-| 1 | **missed small object** | f4500: a puck of about 6 px at mid-ice, in front of a stick. E1: f4200 at the far end (2–4 px) | 1 val FN (E2a) | the far half of the rink is small in the image (H3: 30 rows for 30 m). Few labelled pucks there, because the proposal step found mostly near pucks (round 1) |
-| 2 | **false positive** (look-alike) | f4290: the dark toe of a stick blade, conf 0.39, on a frame without a puck. E2b: 11 FPs, mostly stick blades. E1: skates and a fixed spot at the far end | 1 val FP (E2a) | the labelling rule: a puck touching the blade is *not* labelled when unclear (round 2: 6 such proposals rejected). The model is shown dark spots at blades both as "puck" and as "not a puck" |
+| 1 | **missed small object** | f4500: a puck of about 6 px at mid-ice, also blurred (Zjef). E1: f4200 at the far end (2–4 px) | 1 FN (also type 5) | the far half of the rink is small in the image (H3: 30 rows for 30 m). Few labelled pucks there, because the proposal step found mostly near pucks (round 1) |
+| 2 | **false positive** (look-alike) | f4290: the dark toe of a stick blade, conf 0.39, on a frame without a puck (confirmed). E2b: 11 FPs, mostly stick blades. E1: skates and a fixed spot at the far end | 1 FP | the labelling rule: a puck touching the blade is *not* labelled when unclear (round 2: 6 such proposals rejected). The model is shown dark spots at blades both as "puck" and as "not a puck" |
 | 3 | **duplicate detections** | none with merge NMS; 11 without it (part 1) | 0 | overlapping tiles; solved by the merge NMS |
-| 4 | **occlusion** | f4590: the puck touches the stick blade, partly covered by it. The 23 null frames of round 2 are all pucks hidden by players, skates or the net | 1 val FN | same rule as type 2. Fully hidden pucks are not errors (they are labelled null) |
-| 5 | **motion blur / low quality** | f5070: a streaked puck moving along the boards. f4950: an elongated puck at waist height between two players, probably in the air | 2 val FN | the train set has almost only round, sharp pucks on the ice: round 1 proposed compact blobs on bright ice (`propose_puck.py` filters), so blurred or airborne pucks were rarely proposed and rarely labelled |
-| 6 | **class confusion** | not applicable: one class. The closest case is puck vs stick blade (type 2) | – | – |
+| 4 | **occlusion** | f4590: the puck touches the stick blade; the model scores it 0.044. The 23 null frames of round 2 are all pucks hidden by players, skates or the net | 1 FN | same rule as type 2: the model learned that a dark spot at a blade is usually "not a puck", so a real puck there gets a very low score. Fully hidden pucks are not errors (they are labelled null) |
+| 5 | **motion blur / low quality** | f4500 (Zjef). Possibly f4950 (elongated, at waist height; Zjef could not tell) | 1–2 FN | the train set has almost only round, sharp pucks on the ice: round 1 proposed compact blobs on bright ice (`propose_puck.py` filters), so blurred or airborne pucks were rarely proposed and rarely labelled |
+| 6 | **class confusion** | not applicable: one class. The closest cases are puck vs stick blade: type 2, and the f5070 label | – | – |
 | 7 | **scale problem** | same frames as type 1: the puck is 6–10 px near the camera and 2–4 px far away | see 1 | a 640 px tile keeps the native size, but a 2–4 px object is less than one cell of the finest feature map (P3, stride 8: slides 43–47) |
-| 8 | **crowded scene** | f4950: the puck between two players | 1 val FN (also type 5) | few labelled pucks in crowded spots, for the same reason as type 5 |
+| 8 | **crowded scene** | possibly f4950: between two players (unclear) | 0–1 FN | few labelled pucks in crowded spots, for the same reason as type 5 |
+| – | **label error** (not a model error) | f5070: a stick blade labelled as puck | 1 "FN" | blade-vs-puck is also hard for the labeller; one reviewer, no second check |
 
-f4950 is counted under type 5 and type 8, so the 5 errors give 6 entries. Note that E1 *did*
-find f4950 and f4560 (E1 entry), so which pucks are missed also depends on the training run (see
-S1: recall is stable at 6/10, the false positives vary).
+Note that E1 *did* find f4950 and f4560 (E1 entry), so which pucks are missed also depends on the
+training run (see S1: recall is stable at 6/10, the false positives vary).
 
 ### What this tells us
 
-- **None of the 5 errors is a threshold or NMS problem** (part 1). All of them trace back to what
-  is in the training data:
-  - the blade rule decides types 2 and 4;
-  - the proposal filters of round 1 (compact, sharp blobs on open ice) explain types 1, 5 and 8.
+- **None of the 5 errors is a threshold or NMS problem** (part 1). All of them trace back to the
+  data:
+  - the blade rule decides types 2 and 4 (f4290, f4590);
+  - the proposal filters of round 1 (compact, sharp blobs on open ice) explain types 1, 5 and 8
+    (f4500, maybe f4950);
+  - one "error" is a wrong label (f5070).
 - This matches the "what usually helps" column of slide 38: better labels, more diverse data, data
-  augmentation.
+  augmentation. "Better labels" is literal here: one of our 10 val pucks was not a puck.
 
 ### Hypotheses to test (each one changes one thing)
 
@@ -140,7 +171,9 @@ on the current val set.
 
 ## To do (team)
 
-- [ ] Look at `outputs/sweep/E2a_val/errors.jpg` and fill in `category` in `errors.csv`; correct
-      the types in the table above where you disagree.
-- [ ] Do the same for the false positives of the seed runs (`outputs/eval_puck/seed_*`, on Finn's PC).
+- [x] Check the 5 errors of E2a and fill in `category` in `errors.csv` (Zjef, 2026-11-13).
+- [ ] **Fix the f5070 label in Roboflow** (stick blade → mark the image null, or move the box if
+      someone finds the real puck), as part of v4. Then rerun `eval_puck.py` and this sweep.
+- [ ] A second person looks at f4950 (Zjef could not tell).
+- [ ] Do the same check for the false positives of the seed runs (`outputs/eval_puck/seed_*`, on Finn's PC).
 - [x] Experiment entry in `docs/experiments.md`: P1.

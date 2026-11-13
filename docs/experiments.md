@@ -923,21 +923,30 @@ python scripts/sweep_conf_nms.py --weights outputs/train/fillempje_v3_yolo26s_pu
 3. **No confidence threshold recovers the 4 missed pucks:** the result is the same from 0.05 to
    0.25, so these pucks get no box at all with a score ≥ 0.05. Raising conf to 0.40 removes the
    one false positive (0.39) but also 3 of the 6 found pucks. Conf 0.25 is the knee of the curve.
-4. **The 5 errors at the operating point** (`errors.jpg`; types are a visual check by Claude Code,
-   **not yet confirmed by a team member**):
-   - false positive f4290: the toe of a stick blade, on a frame without a puck;
-   - missed f4590: a puck touching the blade;
-   - missed f5070: a streaked puck in front of the boards (motion blur);
-   - missed f4950: an elongated puck at waist height between two players (blur, probably airborne, crowded);
-   - missed f4500: a puck of about 6 px at mid-ice (small object).
+4. **The 5 errors at the operating point**, typed first by Claude Code and then **checked by Zjef**
+   on enlarged crops (`errors_context.jpg`, verdicts in `errors.csv`):
+   - false positive f4290: the toe of a stick blade, on a frame without a puck (Zjef agrees);
+   - missed f4590: a puck touching the blade. Zjef: "the model didn't miss it". Checked: the model
+     has a box on it (IoU 0.58) with conf 0.044, far below the threshold;
+   - missed f4500: a puck of about 6 px at mid-ice. Zjef: motion-blurred (Claude: small);
+   - missed f4950: an elongated object between two players. Zjef: can't tell;
+   - missed f5070: Claude called it a streaked puck along the boards. **Zjef: a stick blade, so the
+     label is wrong.** The frames f5058–f5082 (`f5070_sequence.jpg`) support him: the streak stays
+     still at the end of a player's stick for 0.4 s.
 
-   The first two follow from the blade labelling rule (E2, round 2). The other three follow from the
-   round-1 proposal filters, which only proposed compact, sharp blobs on open ice.
+   f4290 and f4590 follow from the blade labelling rule (E2, round 2). f4500 (and maybe f4950)
+   follow from the round-1 proposal filters, which only proposed compact, sharp blobs on open ice.
+   f5070 is a **labelling error in the val set**: a blade labelled as a puck, so the model was right.
+   None of E1, E2a and E2b puts any box on it (checked down to conf 0.01), so it has been counted
+   as a miss against all three; the S1 runs are not on this PC. The logged numbers stay as
+   they are until the label is fixed in Roboflow (v4); with it fixed, E2a's val recall would be
+   6/9 instead of 6/10.
 5. **Limits:** 10 pucks; the settings are chosen and scored on the same val frames, part of which
    were built with E1 (A1, finding 4). To be repeated on the model-free test set.
 
 **Conclusion:** the current post-processing (conf 0.25, tile NMS 0.7, merge NMS 0.3) stays, now
-justified by measurement. All five errors of E2a are data problems, not threshold problems. The
-next gains have to come from labels: the blade rule (hypothesis 1 in `error_analysis.md`),
+justified by measurement. All five errors of E2a are data problems, not threshold problems, and
+one of them is a wrong label (f5070). The next gains have to come from labels: fixing f5070 and
+running the consistency check between two labellers, the blade rule (hypothesis 1 in `error_analysis.md`),
 deliberately labelled blurred and airborne pucks or blur augmentation (hypothesis 2), and more
 far-away pucks (hypothesis 3).

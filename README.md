@@ -24,7 +24,7 @@ Main clip since 2026-10-30: `Video/fillempje.mp4` (static camera behind the goal
 | Extra Mile: tracking (T1, T2) | Done: ByteTrack player IDs + Kalman filter for the puck (puck on the minimap in 18% → 42% of frames). `scripts/track.py`, app tab Tracking |
 | Extra Mile: team colours (TM1) | Done: K-means on jersey colours splits white / blue / bystanders (95.5% on a 110-crop sample), plus occupancy heatmaps. `scripts/teams.py`, app tab Teams |
 | Review (A1) | 2026-11-11: code and log audited; the errors found are listed in the log with what was done about each |
-| Error analysis + conf/NMS sweep | 2026-11-13: confidence and both NMS steps measured for E2a (merge NMS essential: AP@50 0.65 → 0.40 without it; no threshold recovers the missed pucks, so conf 0.25 / NMS 0.7 / 0.3 stay). Errors sorted by the course's slide-38 categories and linked to annotation choices. See [`docs/error_analysis.md`](docs/error_analysis.md). Open: a team member confirms the error types |
+| Error analysis + conf/NMS sweep | 2026-11-13: confidence and both NMS steps measured for E2a (merge NMS essential: AP@50 0.65 → 0.40 without it; no threshold recovers the missed pucks, so conf 0.25 / NMS 0.7 / 0.3 stay). Errors sorted by the course's slide-38 categories and linked to annotation choices. See [`docs/error_analysis.md`](docs/error_analysis.md). Error types checked by Zjef: the val "puck" at f5070 is a stick blade (label error, to fix in v4) |
 
 ## Repository layout
 
@@ -46,6 +46,7 @@ scripts/
   train_puck.py              fine-tune YOLO26 on the puck tiles
   eval_puck.py               baseline vs fine-tuned on full frames: confusion matrix, AP50, examples
   sweep_conf_nms.py          confidence threshold + tile/merge NMS sweep, FP types, crop sheet of every error
+  label_agreement.py         consistency check between two labellers: pick blind frames, compare with IoU
   homography.py              image -> rink mapping (lens correction, homography, camera motion), minimap video
   pipeline.py                per-frame glue used by the app: detect -> map -> draw
   rink.py                    NHL (ft) and IIHF (m) rink templates and minimap drawing
@@ -172,6 +173,18 @@ python scripts/seed_summary.py --variant E2a seed_E2a_s0 seed_E2a_s1 seed_E2a_s2
 
 ```bash
 python scripts/sweep_conf_nms.py --weights outputs/train/fillempje_v3_yolo26s_puck_640/weights/best.pt --frames data/puck_tiles/fillempje_v3_tiles640/frames.csv --name E2a_val
+```
+
+8. Consistency check between two labellers (`annotation.md`, rule 5). Pick 10 frames and write them without labels (exclude frames the second labeller has already seen up close):
+
+```bash
+python scripts/label_agreement.py pick --export data/roboflow/pluhchallenge_v3 --n 10 --exclude 4290 4500 4590 4950 5070 --name round1
+```
+
+The second labeller uploads `data/consistency/round1/*.jpg` to a separate Roboflow project (so the first labels are not visible), labels them with the rules of `annotation.md` without looking at the team dataset, and exports in YOLOv8 format. Then:
+
+```bash
+python scripts/label_agreement.py compare --a data/roboflow/pluhchallenge_v3 --b data/roboflow/<second-labeller-export> --name round1
 ```
 
 Moving the project to another PC: the `data.yaml` files in `data/puck_tiles/*/` hold an absolute path. Change the `path:` line to your own folder, or rebuild the dataset with `make_puck_dataset.py`. Rebuilding from the Roboflow v3 export (YOLOv8 format) gives exactly the same tiles: E2a's `best.pt` validates at the logged 0.634 / 0.382 on them (checked 2026-11-13).
