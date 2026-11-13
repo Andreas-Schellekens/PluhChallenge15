@@ -43,6 +43,7 @@ scripts/
   make_puck_dataset.py       Roboflow export -> tiled dataset with a time-based train/val split
   train_puck.py              fine-tune YOLO26 on the puck tiles
   eval_puck.py               baseline vs fine-tuned on full frames: confusion matrix, AP50, examples
+  calibrate_lens.py          plumb-line scan for the lens parameter k1 (H4)
   homography.py              image -> rink mapping (lens correction, homography, camera motion), minimap video
   pipeline.py                per-frame glue used by the app: detect -> map -> draw
   rink.py                    NHL (ft) and IIHF (m) rink templates and minimap drawing

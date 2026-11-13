@@ -173,6 +173,9 @@ background. The score is the mean distance of the yellow pixels to their best-fi
 |---|---|---|---|---|---|
 | deviation from a straight line (px) | 1.18 | 0.97 | 0.54 | **0.34** | 0.87 |
 
+*Added 2026-11-13:* no script produced this table (A1). `scripts/calibrate_lens.py` now does;
+it finds the same best k1, with slightly different scores. See H4.
+
 The ice region is only mildly distorted; the strong fisheye is mostly in the roof, which we
 don't need.
 
@@ -519,6 +522,9 @@ dimensions, the Kalman equations, and all E0-B / H1 / E1 / E2 / T1 summary numbe
 the `yolo26s_640` row and the Quadro fps in E0, "3.6 frames/s" in H1, the k1 plumb-line table in
 H2 (no calibration script in the repo), and the clip samples of E1/E2 (23/30, 28/30, 19/30), which
 are visual checks by Claude Code that no team member has confirmed.
+
+*Added 2026-11-13 (Mihai):* the E0 outputs from the original runs of 2026-10-16 are still on Mihai's PC
+(`outputs/baseline/yolo26s_{640,1280}/summary.json`); they confirm the `yolo26s_640` row and the Quadro fps (6.27 / 6.62).
 
 ## H3 – Homography with 6 keypoints, fitted in pixels, 2026-11-11
 
@@ -873,3 +879,70 @@ frame, puck shown in 95 of 300 frames (58 of them predicted).
   cut boxes end at y = 1075–1078 (of 1080); real feet near the edge ended at 1043 and 1057.
   The position itself is not corrected.
 - A legend under the minimap, and the people count split per colour group.
+
+## H4 – Lens calibration made reproducible (plumb-line script), 2026-11-13
+
+**Why.** H2 chose the lens parameter k1 = −0.125 from a table of "deviation from a straight
+line", but no script in the repo produced that table (A1: unverified). Every rink position goes
+through this lens model, so the choice should be reproducible.
+
+Command (Mihai's PC, Quadro T1000; CPU only, a few seconds):
+```
+python scripts/calibrate_lens.py
+```
+Run by Claude Code at Mihai's request. Outputs: `outputs/lens/fillempje/` (`k1_scan.csv`,
+`k1_scan_fine.csv`, `k1_scan.png`, `mask.jpg`, `straightened.jpg`, `summary.json`).
+
+**Method** (`scripts/calibrate_lens.py`, the plumb-line method described in H2, now written out)
+1. **Straight lines:** the yellow kick plates along both side boards, found in the median
+   background (the empty rink) with an HSV threshold (H 18–40, S ≥ 80, V ≥ 100), below row 380
+   so the yellow advertising boards are left out. `mask.jpg` shows the pixels it used: only the
+   two kick plates.
+2. **One point per image column** (573 left, 642 right): the median row of the yellow pixels.
+   The stripe is several pixels thick; we want its centre line, not its width.
+3. **For each k1:** undistort the points, fit a line by total least squares (`cv2.fitLine`),
+   and take the mean perpendicular distance. Score = mean of both sides.
+4. **Exact inverse of the lens model.** The model gives r_d = r_u (1 + k1 r_u²); the script
+   solves it for r_u with Newton's method (100 steps). It does *not* use `Lens.undistort`
+   (see finding 2).
+
+**Results**
+
+| k1 | 0 | −0.05 | −0.10 | **−0.125** | −0.15 |
+|---|---|---|---|---|---|
+| H2 table (px) | 1.18 | 0.97 | 0.54 | **0.34** | 0.87 |
+| H4, left / right / mean (px) | 1.50 / 1.77 / 1.63 | 1.22 / 1.46 / 1.34 | 0.66 / 0.87 / 0.77 | **0.36 / 0.43 / 0.39** | 1.24 / 0.94 / 1.09 |
+
+The fine scan (step 0.00125 around the minimum) gives the best k1 = **−0.126** (0.390 px), against
+0.394 px at the configured −0.125.
+
+**Findings**
+1. **The H2 choice is confirmed:** same minimum, same shape of the curve. The absolute numbers
+   differ from the H2 table (for example 1.63 against 1.18 at k1 = 0). H2 did not record how the
+   points were taken, so we cannot say why; the ranking of the k1 values is the same, and that is
+   what the choice depends on. The difference between −0.125 and −0.126 is 0.004 px, so the
+   config stays at −0.125.
+2. **`Lens.undistort` is not exact near the image edge.** It calls `cv2.undistortPoints`, which
+   stops after a fixed 5 iterations. Compared with the exact inverse at k1 = −0.125:
+   - kick-plate points (r ≈ 0.96 focal lengths): up to 1.6 px off;
+   - all 33 454 person foot points of E0-B: median 0.000 px, 99th percentile 0.75 px, 0.8% more
+     than 1 px off. The worst is 134 px: a point right next to the fold (next item), at the bottom
+     corner of the image, where the iteration does not converge.
+
+   The keypoints are near the centre (r ≤ 0.53), where the two agree, so H3 is not affected. For
+   a few players in the bottom corners next to the camera, the position is off. Possible fix:
+   use the exact inverse in `Lens.undistort`. Not done yet, because it would change logged
+   numbers (T2, TM1) slightly and they would have to be re-run.
+3. **The fold limits the k1 range.** For k1 < 0 the model has no inverse beyond
+   r_d = 2 / (3·√(3|k1|)). With k1 = −0.125 that is r = 1.089, and the image corners are at
+   r = 1.10. So the extreme bottom corners of the image cannot be undistorted at all (1 of the
+   33 454 foot points). Below k1 ≈ −0.16 even the kick plates fall beyond the fold. Those k1
+   values are marked invalid in the scan, which is why the curve stops there. This is also why
+   H3's test with k1 = −0.3 (residual 2.7 px) is not a real alternative.
+
+`straightened.jpg` (background undistorted with the best k1) shows straight boards that meet at
+the far end. Looked at by Claude Code, not yet by a team member.
+
+**App, same day:** the Tracking and Puck model tabs now open on the current runs
+(`fillempje_teams` = T2, `v3val_E2a`), instead of the alphabetically first ones (T1, E1 on the old
+4-frame val set).
