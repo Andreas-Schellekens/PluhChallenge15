@@ -277,7 +277,7 @@ What the assignment asks under "label consistency as a team" and what we have:
 |---|---|
 | labelling rules | written down (above), applied in both rounds, **not yet confirmed by the whole team** |
 | occlusion handling | rule: label when ≥ 50% of the puck is visible; hidden puck → frame marked null (23 frames). The same 50% rule cuts labels at tile edges (`make_puck_dataset.py`) |
-| consistency between labellers | **measured 2026-11-13 (round 1, 10 frames): low.** Zjef labelled 10 frames blind; same puck (IoU ≥ 0.5) in 0 of the 6 frames where either of us saw one, presence agreement 5/10. Causes: the blade question, single frames without video, and a different box margin. See the last section |
+| consistency between labellers | **measured 2026-11-13 (round 1, 10 frames): low.** Zjef labelled 10 frames blind; same puck (IoU ≥ 0.5) in 0 of the 7 frames where either of us saw one (6 of them have a puck in the team labels), presence agreement 5/10 (this counts the 2 "puck in both" frames as agreeing although the boxes differ, IoU 0 and 0.26, and counts "unsure" as "no puck"). Causes: the blade question, single frames without video, and a different box margin. See the last section |
 | puck at the stick blade | **not decided.** In practice: not labelled when it is not clearly separate (6 rejected in round 2). This is the main false positive of every model in E2; S1 shows that extra hard negatives do not remove it. The consistency check adds: 3 of the 7 disagreements are this question, in both directions (f2700 and f3780 labelled by Andreas, f4530 by Zjef) |
 | train/val split | by time (frames ≥ 4200 = val), no frame or tile is in both (verified 2026-11-11) |
 
@@ -309,8 +309,10 @@ python scripts/label_agreement.py compare --a data/roboflow/pluhchallenge_v3 --b
 ```
 
 A = the team dataset (AI proposals reviewed and approved by Andreas), B = Zjef, blind.
-Outputs: `outputs/label_agreement/round1/` (`agreement.csv`, `summary.json`, `sheet.jpg`,
-`disagreements.jpg` with the frames 12 before and after each disagreement).
+Outputs of the command: `outputs/label_agreement/round1/` (`agreement.csv`, `summary.json`,
+`sheet.jpg`). `disagreements.jpg` (the frames 12 before and after each disagreement) was made ad
+hoc during the session on Zjef's PC; no script in the repo makes it, so rerunning the command
+does not reproduce it.
 
 **Result**
 
@@ -322,7 +324,9 @@ Outputs: `outputs/label_agreement/round1/` (`agreement.csv`, `summary.json`, `sh
 | puck only in B | 1 (f4530) |
 | no puck in both | 3 (f4320, f4470, f4710) |
 
-Presence agreement (both a puck or both none): 5 of 10. Mean IoU where both labelled: 0.13.
+Presence agreement (both a puck or both none): 5 of 10. This counts the 2 "puck in both" frames
+as agreeing although the boxes differ (IoU 0 at f3720, 0.26 at f4350), and counts "unsure" as
+"no puck" (f450, f3780). Mean IoU where both labelled: 0.13.
 
 **The disagreements.** Zjef's reasons are his own answers after seeing `disagreements.jpg`; the
 descriptions of what the frames show are Claude's and not yet checked by Andreas.
@@ -339,7 +343,7 @@ descriptions of what the frames show are Claude's and not yet checked by Andreas
 
 **What it means**
 1. **Our ground truth is less certain than our metrics suggest.** With two labellers agreeing on
-   the same puck in none of 6 frames, a model scored against one labeller's boxes is also scored
+   the same puck in none of the 7 frames where either saw one, a model scored against one labeller's boxes is also scored
    against that labeller's choices. This weighs most on mAP@50:95: for f4350 even the same puck
    gives IoU 0.26, and a 2 px shift on a 14 px puck already gives IoU 0.75 (tested with
    `label_agreement.py`), below the stricter thresholds of mAP@50:95.

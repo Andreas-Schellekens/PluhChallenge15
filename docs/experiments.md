@@ -991,20 +991,24 @@ python scripts/sweep_conf_nms.py --weights outputs/train/fillempje_v3_yolo26s_pu
 1. **The merge NMS between tiles is essential:** without it AP@50 drops from 0.65 to 0.40. The extra
    false positives are almost all duplicates, the same puck found by two overlapping tiles
    (slide 38, type 3). This comes from our tiling design, not from the model.
-2. **The exact NMS value does not matter for the puck** as long as both steps are ≤ 0.7: there is
-   only one puck, so NMS never suppressed a correct detection (6 TP in every cell).
+2. **The exact NMS value hardly matters for the puck** as long as both steps are ≤ 0.7: TP / FP /
+   FN at conf 0.25 are the same for every value from 0.1 to 0.7, and AP@50 is 0.65 except at merge
+   NMS 0.7 with tile NMS 0.7 or 0.9 (0.63, grid in `error_analysis.md`). There is only one puck,
+   so NMS never suppressed a correct detection (6 TP in every cell).
 3. **No confidence threshold recovers the 4 missed pucks:** the result is the same from 0.05 to
    0.25, so these pucks get no box at all with a score ≥ 0.05. Raising conf to 0.40 removes the
    one false positive (0.39) but also 3 of the 6 found pucks. Conf 0.25 is the knee of the curve.
 4. **The 5 errors at the operating point**, typed first by Claude Code and then **checked by Zjef**
-   on enlarged crops (`errors_context.jpg`, verdicts in `errors.csv`):
+   on enlarged crops (`errors_context.jpg` and his verdicts in extra `errors.csv` columns were made
+   ad hoc on his PC, not by a script in the repo; the command writes `errors.csv` with an empty
+   `category` column and `errors.jpg`):
    - false positive f4290: the toe of a stick blade, on a frame without a puck (Zjef agrees);
    - missed f4590: a puck touching the blade. Zjef: "the model didn't miss it". Checked: the model
      has a box on it (IoU 0.58) with conf 0.044, far below the threshold;
    - missed f4500: a puck of about 6 px at mid-ice. Zjef: motion-blurred (Claude: small);
    - missed f4950: an elongated object between two players. Zjef: can't tell;
    - missed f5070: Claude called it a streaked puck along the boards. **Zjef: a stick blade, so the
-     label is wrong.** The frames f5058–f5082 (`f5070_sequence.jpg`) support him: the streak stays
+     label is wrong.** The frames f5058–f5082 (`f5070_sequence.jpg`, also made ad hoc) support him: the streak stays
      still at the end of a player's stick for 0.4 s.
 
    f4290 and f4590 follow from the blade labelling rule (E2, round 2). f4500 (and maybe f4950)

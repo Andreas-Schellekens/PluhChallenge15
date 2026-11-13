@@ -7,9 +7,12 @@ threshold problem and which are a model or data problem.
 
 **Status (2026-11-13).** Drafted by Claude Code. The numbers come from a saved run
 (`outputs/sweep/E2a_val/`, command below). **The 5 errors at the operating point were checked by
-Zjef** on enlarged crops (`errors_context.jpg`); his verdicts are in `errors.csv` (`category`,
-`checked_by`, `note`) and in "Team check" below. One of them turned out to be a labelling error
-(f5070). The error types quoted from other runs (E1, E2b) are still Claude's visual checks.
+Zjef** on enlarged crops; his verdicts are in "Team check" below. The enlarged crops
+(`errors_context.jpg`), the frame sequence of f5070 (`f5070_sequence.jpg`) and the extra columns
+`checked_by` and `note` in his copy of `errors.csv` were made ad hoc during the session on Zjef's
+PC; no script in the repo makes them, so rerunning the command does not reproduce them. The
+command itself writes `errors.csv` (with an empty `category` column) and `errors.jpg`, plus the
+sweep tables and plots. One of the errors turned out to be a labelling error (f5070). The error types quoted from other runs (E1, E2b) are still Claude's visual checks.
 
 ## Setup
 
@@ -75,7 +78,9 @@ The number of found pucks is 6 in every cell: NMS never removed a correct detect
    blade spot of f4290 found by two tiles; not checked one by one).
    This is error type 3 of slide 38 ("duplicate detections → needs NMS"),
    and it is caused by our own design choice (overlapping tiles), not by the model.
-2. **The exact NMS value hardly matters, as long as both steps are ≤ 0.7.** A puck is about
+2. **The exact NMS value hardly matters, as long as both steps are ≤ 0.7.** For TP / FP / FN at
+   conf 0.25 every value from 0.1 to 0.7 gives the same result (6 / 1 / 4); AP@50 is 0.65 in
+   every cell except merge NMS 0.7 with tile NMS 0.7 or 0.9, where it is 0.63. A puck is about
    10 px, so two boxes on the same puck overlap a lot and two different pucks never occur in one
    frame. Only very loose settings (0.9) let duplicates through. The fear from slide 39, that a
    low NMS threshold removes real nearby objects, does not apply to a single small puck.
@@ -98,7 +103,8 @@ The number of found pucks is 6 in every cell: NMS never removed a correct detect
 ## Part 2: the errors, by type (slide 38)
 
 At the operating point E2a makes 5 errors on the val frames: 1 false positive and 4 missed pucks
-(`errors.csv`, `errors.jpg`, enlarged in `errors_context.jpg`).
+(`errors.csv`, `errors.jpg`, both written by the command; the enlarged `errors_context.jpg` was
+made ad hoc on Zjef's PC and is not reproduced by the script).
 
 ### Team check (Zjef, 2026-11-13)
 
@@ -110,7 +116,7 @@ Claude first typed the errors from the crops; Zjef then judged the enlarged crop
 | 2 | f4500 | missed | small object (6×6 px) | **puck, motion-blurred** | both apply: tiny *and* soft |
 | 3 | f4590 | missed | puck touching the blade | **puck; "the model didn't miss it"** | correct: the model has a box on it (IoU 0.58) with conf 0.044, far below 0.25 |
 | 4 | f4950 | missed | blurred puck in the air, crowded | **can't tell** | – |
-| 5 | f5070 | missed | streaked puck along the boards | **stick blade, not a puck** | `f5070_sequence.jpg` (f5058–f5082): the dark streak stays still at the end of a player's stick for 0.4 s; a puck would move |
+| 5 | f5070 | missed | streaked puck along the boards | **stick blade, not a puck** | `f5070_sequence.jpg` (f5058–f5082; made ad hoc on Zjef's PC, not by a script in the repo): the dark streak stays still at the end of a player's stick for 0.4 s; a puck would move |
 
 **f5070 is a labelling error.** The val label is on a stick blade, so the model was right to
 find nothing there. Two consequences:
@@ -171,7 +177,8 @@ on the current val set.
 
 ## To do (team)
 
-- [x] Check the 5 errors of E2a and fill in `category` in `errors.csv` (Zjef, 2026-11-13).
+- [x] Check the 5 errors of E2a and fill in `category` in `errors.csv` (Zjef, 2026-11-13; his
+      filled-in copy is not in the repo, and a rerun writes the column empty again).
 - [ ] **Fix the f5070 label in Roboflow** (stick blade → mark the image null, or move the box if
       someone finds the real puck), as part of v4. Then rerun `eval_puck.py` and this sweep.
 - [ ] A second person looks at f4950 (Zjef could not tell).
