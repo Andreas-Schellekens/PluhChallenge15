@@ -152,7 +152,7 @@ starts to memorise them. `best.pt` is from epoch 19.*
 
 *Predictions on validation tiles.*
 
-### 3.4 The experiments
+### 3.5 The experiments
 
 | run | change | tile mAP@50 | tile mAP@50:95 | full frames TP / FP / FN | AP@50 full frame |
 |---|---|---|---|---|---|
@@ -186,6 +186,7 @@ a clean hard-negative variant (E2c) with seeds 0, 1, 2:
 | E2c (+ hard negatives) | 0.52 ± 0.03 | 0.30 ± 0.004 | 0.50 ± 0.10 | 0.53 ± 0.02 |
 
 **What we learned**
+
 1. **More labelled data helped most** (E1 → E2a): more precise, AP@50 0.58 → 0.65, and visibly fewer
    false alarms on the clip.
 2. **The seed alone moves mAP@50 by ±0.05.** A difference under ~0.1 between two single runs means
@@ -357,13 +358,15 @@ distance and L had a 5× larger range than a/b. Standardising the features fixed
 ## 9. What went well, what went badly
 
 **Went well**
-- The tiling design turned the puck from almost never found (0/10) into found in 6/10 val frames with
-  AP@50 0.65.
+
+- The tiling design turned the puck from almost never found (0/10) into found in 6/9 val frames with
+  AP@50 0.72 (v4).
 - Model-in-the-loop labelling sped up round 2, and human review kept wrong proposals out.
 - Honest measurement: seeds, an audit, a fair gap test, and errors traced to the data.
 - A working end-to-end app with two Extra Mile tracks.
 
 **Went badly / limitations**
+
 - The dataset is small (41 pucks) and biased towards easy pucks by our first proposal step.
 - No test set picked without a model; every val number is somewhat optimistic.
 - Agreement between labellers was low; the blade question took long to decide.
@@ -371,7 +374,8 @@ distance and L had a 5× larger range than a/b. Standardising the features fixed
 - The far half of the rink is only mapped to several metres; player IDs break after occlusions.
 
 **Next steps**
-1. ~~Roboflow v4, retrain over 3 seeds, re-evaluate~~: done (E3).
+
+1. Roboflow v4, retrain over 3 seeds, re-evaluate: **done** (E3).
 2. A model-free test set (e.g. every 30th frame of an unseen part, labelled by hand).
 3. Small ablations of the recipe (e.g. scale augmentation, yolo26n vs s), each over 3 seeds.
 4. Second consistency round with a third labeller.
