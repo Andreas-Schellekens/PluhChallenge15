@@ -28,7 +28,7 @@ Experiment IDs: E = puck detector, H = homography, T = tracking, TM = teams, S =
 Open, and to be done by the team (not by an AI):
 - Blade rule decided (Andreas, 2026-11-13): a puck touching the stick blade is labelled only when it can be told apart from the blade (in the frame itself or in the ±10 neighbouring frames); when it really cannot, it is not labelled. It remains the main false positive of every model.
 - Consistency check: round 1 done 2026-11-13 (Zjef labelled 10 frames blind; same puck in 0 of the 7 frames where either labeller saw one, presence agreement 5/10, mostly the blade question). Decided after it (Finn, 2026-11-13): box margin 2 px and the ±10 frames check always; `label_blind.py` applies both (`--margin`, `--video` + key `v`). Still open: round 2 on 10 new frames from Roboflow v4, ideally with a third person (commands in `docs/annotation.md`, "Decisions after round 1").
-- f5070 is fixed in Roboflow (Finn, 2026-11-13). Still open: export v4, rebuild the tiles, rerun `eval_puck.py` and `sweep_conf_nms.py`.
+- f5070 removed in Roboflow (Finn); v4 generated, tiles rebuilt, all models re-scored and the E2a recipe retrained over 3 seeds (E3, 2026-11-13).
 - A test set chosen without any model (the val set was partly built with E1, see A1).
 - A team member confirms the visual checks that Claude Code did (clip samples in E1/E2, the 110-crop team sample in TM1).
 - Complete `docs/genai.md`: own contributions and the statement.

@@ -31,7 +31,7 @@ because the camera moved and the puck was rarely findable.)
 | part of the brief | status | where |
 |---|---|---|
 | 1. targeted annotation (40–80 frames) | 64 human-reviewed frames (41 with a puck, 23 verified empty), 2 assisted rounds, written rules, consistency check between two labellers | §2, `annotation.md` |
-| 2. fine-tuning + mAP | YOLO26s fine-tuned on 640 px tiles; best run mAP@50 0.634 / mAP@50:95 0.382; over 3 seeds 0.56 ± 0.06 / 0.31 ± 0.01 | §3 |
+| 2. fine-tuning + mAP | YOLO26s fine-tuned on 640 px tiles; final dataset v4: our model mAP@50 0.680 / mAP@50:95 0.410, over 3 seeds 0.59 ± 0.10 / 0.36 ± 0.06 | §3 |
 | 2. error analysis | conf/NMS sweep, every error typed (course slide 38) and traced to an annotation choice | §4, `error_analysis.md` |
 | 3. homography + minimap | lens correction + 6 keypoints, IIHF template; decimetres near the camera, metres at the far end | §5 |
 | 4. local deployment | Streamlit app, all parameters in the sidebar | §6 |
@@ -41,8 +41,8 @@ because the camera moved and the puck was rarely findable.)
 
 | | pretrained baseline | our model (E2a) |
 |---|---|---|
-| puck found in the 10 val pucks (full frames) | 0 / 10 | 6 / 10 (1 false positive) |
-| AP@50 on full val frames | 0.01 | 0.65 (seed mean 0.59) |
+| puck found in the 9 val pucks (full frames, v4) | 0 / 9 | 6 / 9 (1 false positive) |
+| AP@50 on full val frames (v4) | 0.02 | 0.72 (seed mean 0.67) |
 | clip frames with a puck detection | 10 of 2548 (0.4%) | 455 (18%), ~41.6% on the minimap after the Kalman filter |
 
 ---
@@ -69,6 +69,10 @@ approved, moved or rejected each one.
 Result: Roboflow v3, **64 frames**, 41 with a puck and 23 verified empty (the reviewer looked and the
 puck was hidden). The low proposal precision is the reason a human checked every label.
 
+**Final dataset: Roboflow v4 (2026-11-13), 63 frames, 40 with a puck.** The error analysis (§4) showed
+that the val label at f5070 was a stick blade; the image was removed from the project and v4 was
+generated with the same settings. Train is unchanged; val now has 24 frames with 9 pucks.
+
 ### 2.3 Labelling rules
 - **Box:** the visible puck + 2 px on each side, no motion-blur tail.
 - **Occlusion:** label when ≥ 50% of the puck is visible. A fully hidden puck makes the frame a
@@ -81,7 +85,7 @@ puck was hidden). The low proposal precision is the reason a human checked every
 ### 2.4 Train/val split
 **By time, not random:** frames ≥ 4200 (the last ~20% of the clip) are validation. Neighbouring frames
 are near-duplicates, so a random split would leak the same puck into train and val. Train = 39 frames
-(31 pucks), val = 25 frames (10 pucks, 15 empty). No frame or tile is in both (checked in the audit A1).
+(31 pucks), val = 24 frames in v4 (9 pucks, 15 empty). No frame or tile is in both (checked in the audit A1).
 
 ### 2.5 Consistency between labellers
 Zjef labelled 10 frames blind with `label_blind.py`. Agreement was **low**: the same puck in 0 of the 7
@@ -117,7 +121,17 @@ are merged with a second NMS step.
 | augmentation | mosaic 1.0, scale ±0.2, horizontal flip 0.5, no vertical flip, no rotation | the camera is fixed and upright; a mirrored rink is still a rink; a large scale change would push a 6 px puck below what the model can see |
 | training | 100 epochs, batch 16, imgsz 640, seed 0, RTX 4060 Laptop (~25 min) | `best.pt` = the epoch with the best val fitness |
 
-### 3.3 Training curves
+### 3.3 Training run
+
+![Training console](report_img/console_train_v4_s0.png)
+
+*The console output of a training run with the E2a recipe (here the v4 rerun with seed 0, RTX 4060
+Laptop, 25 min). Rendered from the saved log `outputs/train_v4_s0.log`: progress-bar redraws are
+removed and the middle epochs and the full argument list are left out ("..."); every number shown is
+from the log. Note how noisy the val metrics are from epoch to epoch (epoch 19: mAP@50 0.68, epoch 20:
+0.61) and how `best.pt` (epoch 19) is validated again at the end: 0.68 / 0.41.*
+
+### 3.4 Training curves
 
 ![E2a training curves](report_img/train_E2a_results.png)
 
@@ -147,7 +161,21 @@ starts to memorise them. `best.pt` is from epoch 19.*
 | **E2a** | 41 labelled frames (round 2) | **0.634** | **0.382** | **6 / 1 / 4** | **0.65** |
 | E2b | E2a + hard negatives (skate crops, logo spot) | 0.460 | 0.269 | 7 / 11 / 3 | 0.55 |
 
-\* on the old 4-frame val set, not comparable.
+\* on the old 4-frame val set, not comparable. All rows above are scored on v3 (10 val pucks).
+
+**Re-scored on the final dataset v4** (f5070 removed, 9 val pucks; E3):
+
+| model | tile mAP@50 | tile mAP@50:95 | full frames TP / FP / FN | AP@50 full frame |
+|---|---|---|---|---|
+| baseline | – | – | 0 / 0 / 9 | 0.02 |
+| E1 | 0.522 | 0.346 | 5 / 2 / 4 | 0.64 |
+| **E2a** | **0.680** | **0.410** | **6 / 1 / 3** | **0.72** |
+| E2b | 0.497 | 0.290 | 7 / 11 / 2 | 0.61 |
+| E2a recipe retrained on v4, 3 seeds | 0.586 ± 0.104 | 0.362 ± 0.057 | 6 / 1–2 / 3 | 0.665 ± 0.050 |
+
+Retraining with seed 0 on the same GPU gave **exactly** the same model as the original E2a (best
+epoch 19, identical metrics and clip detections): training is deterministic, so the run is fully
+reproducible.
 
 **Seed study (S1).** One run per variant on 10 val pucks proves little, so we trained the E2a recipe and
 a clean hard-negative variant (E2c) with seeds 0, 1, 2:
@@ -193,7 +221,7 @@ Our pipeline has two NMS steps: inside each tile (Ultralytics) and between overl
 | f4590 | missed | puck touching the blade; the model has a box on it at conf 0.044 | same blade rule: the model learned "dark spot at a blade = usually not a puck" |
 | f4500 | missed | ~6 px puck, motion-blurred | round-1 proposals only found sharp, compact pucks, so blurred pucks are rare in train |
 | f4950 | missed | elongated object between two players | unclear (Zjef could not tell); crowded scene |
-| f5070 | "missed" | **a stick blade labelled as puck** (label error) | one reviewer, blade-vs-puck is hard for people too; fixed in Roboflow |
+| f5070 | "missed" | **a stick blade labelled as puck** (label error) | one reviewer, blade-vs-puck is hard for people too; removed in Roboflow v4: recall becomes 6/9 for E2a, nothing else changes (E3) |
 
 **Conclusion:** none of the errors is a threshold problem. All of them come from the data: the blade
 rule, the bias of our proposal step, and one wrong label. This is why the blade rule was written down
@@ -249,7 +277,35 @@ draw), so the app runs the same code the experiments were logged with.
 Sidebar: person model size and confidence, puck detector (fine-tuned / baseline / off) with confidence,
 tile size and overlap, lens k1, camera motion, Kalman settings, team colours.
 
-*TODO team: add one screenshot of the Clip tab (video + minimap) here.*
+![App: Frame tab](report_img/app_frame.jpg)
+
+*Frame tab at 30 s: person boxes coloured by team (white / blue / yellow = "other"), the puck ring
+with its confidence (0.58), the projected rink template on the video, and the minimap with every
+player on the ice.*
+
+![App: Clip tab](report_img/app_clip.jpg)
+
+*Clip tab after processing 20–25 s with tracking on: ByteTrack IDs on the boxes and the same IDs on
+the minimap below the video.*
+
+![App: Puck model tab](report_img/app_puck_model.jpg)
+
+*Puck model tab: baseline vs fine-tuned on the val frames, with the confusion matrices.*
+
+![App: Homography tab](report_img/app_homography.jpg)
+
+*Homography tab: the 6 keypoints with their reprojection error in metres and pixels.*
+
+![App: Tracking tab](report_img/app_tracking.jpg)
+
+*Tracking tab: the whole-clip tracking run and the gap test. (On this PC the run gives 232 player IDs;
+the log's 198 came from another GPU, see R1.)*
+
+![App: Teams tab](report_img/app_teams.jpg)
+
+*Teams tab: the colour groups and the K-means selection.*
+
+The app screenshots were taken by Claude Code with headless Chrome on the running app (2026-11-13).
 
 ---
 
@@ -294,7 +350,7 @@ distance and L had a 5× larger range than a/b. Standardising the features fixed
 | hard negatives seemed harmful | E2b had 11 false positives | audit found the datasets differed in almost every tile; clean repeat over 3 seeds (S1): no benefit, no big harm |
 | optimistic results in our own log | unfair Kalman gap test, confounded comparison | an audit of all code and numbers (A1); corrected entries instead of rewriting them |
 | labellers disagree | 0/7 same puck between two labellers | written rules: 2 px margin, ±10 frames check, blade rule |
-| a val label was wrong | f5070 was a stick blade | found in the error check (Zjef), fixed in Roboflow |
+| a val label was wrong | f5070 was a stick blade | found in the error check (Zjef), removed in Roboflow, v4 generated and all models re-scored (E3) |
 
 ---
 
@@ -315,7 +371,7 @@ distance and L had a 5× larger range than a/b. Standardising the features fixed
 - The far half of the rink is only mapped to several metres; player IDs break after occlusions.
 
 **Next steps**
-1. Roboflow v4 (blade rule applied, f5070 fixed), retrain over 3 seeds, re-evaluate.
+1. ~~Roboflow v4, retrain over 3 seeds, re-evaluate~~: done (E3).
 2. A model-free test set (e.g. every 30th frame of an unseen part, labelled by hand).
 3. Small ablations of the recipe (e.g. scale augmentation, yolo26n vs s), each over 3 seeds.
 4. Second consistency round with a third labeller.
