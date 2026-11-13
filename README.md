@@ -24,6 +24,8 @@ Main clip since 2026-10-30: `Video/fillempje.mp4` (static camera behind the goal
 | Extra Mile: tracking (T1, T2) | Done: ByteTrack player IDs + Kalman filter for the puck (puck on the minimap in 18% → 42% of frames). `scripts/track.py`, app tab Tracking |
 | Extra Mile: team colours (TM1) | Done: K-means on jersey colours splits white / blue / bystanders (95.5% on a 110-crop sample), plus occupancy heatmaps. `scripts/teams.py`, app tab Teams |
 | Review (A1) | 2026-11-11: code and log audited; the errors found are listed in the log with what was done about each |
+| Error analysis + conf/NMS sweep | 2026-11-13: confidence and both NMS steps measured for E2a (merge NMS essential: AP@50 0.65 → 0.41 without it; no threshold recovers the missed pucks, so conf 0.25 / NMS 0.7 / 0.3 stay). Errors sorted by the course's slide-38 categories and linked to annotation choices. See [`docs/error_analysis.md`](docs/error_analysis.md). Open: a team member confirms the error types |
+
 ## Repository layout
 
 ```
@@ -43,6 +45,7 @@ scripts/
   make_puck_dataset.py       Roboflow export -> tiled dataset with a time-based train/val split
   train_puck.py              fine-tune YOLO26 on the puck tiles
   eval_puck.py               baseline vs fine-tuned on full frames: confusion matrix, AP50, examples
+  sweep_conf_nms.py          confidence threshold + tile/merge NMS sweep, FP types, crop sheet of every error
   homography.py              image -> rink mapping (lens correction, homography, camera motion), minimap video
   pipeline.py                per-frame glue used by the app: detect -> map -> draw
   rink.py                    NHL (ft) and IIHF (m) rink templates and minimap drawing
@@ -52,6 +55,7 @@ configs/
 docs/
   experiments.md             experiment log: one entry per run (config, results, conclusions)
   annotation.md              puck labelling rules, review status and split plan
+  error_analysis.md          puck detector errors by type (course slide 38) + the conf/NMS sweep
   genai.md                   how GenAI was used, what the team checked (draft, to complete)
 Video/                       input clips              (not in git; share via the team drive)
 data/                        annotated datasets       (not in git)
@@ -164,7 +168,13 @@ python scripts/teams.py --video Video/fillempje.mp4 --players outputs/track/fill
 python scripts/seed_summary.py --variant E2a seed_E2a_s0 seed_E2a_s1 seed_E2a_s2 --variant E2c seed_E2c_s0 seed_E2c_s1 seed_E2c_s2
 ```
 
-Moving the project to another PC: the `data.yaml` files in `data/puck_tiles/*/` hold an absolute path. Change the `path:` line to your own folder, or rebuild the dataset with `make_puck_dataset.py`.
+7. Error analysis: sweep the confidence threshold and both NMS steps, and get a crop of every error (see [`docs/error_analysis.md`](docs/error_analysis.md)). Run it again with the test set's `frames.csv` once that exists:
+
+```bash
+python scripts/sweep_conf_nms.py --weights outputs/train/fillempje_v3_yolo26s_puck_640/weights/best.pt --frames data/puck_tiles/fillempje_v3_tiles640/frames.csv --name E2a_val
+```
+
+Moving the project to another PC: the `data.yaml` files in `data/puck_tiles/*/` hold an absolute path. Change the `path:` line to your own folder, or rebuild the dataset with `make_puck_dataset.py`. Rebuilding from the Roboflow v3 export (YOLOv8 format) gives exactly the same tiles: E2a's `best.pt` validates at the logged 0.634 / 0.382 on them (checked 2026-11-13).
 
 ## Team conventions
 
