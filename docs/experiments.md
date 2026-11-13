@@ -1027,3 +1027,83 @@ one of them is a wrong label (f5070). The next gains have to come from labels: f
 running the consistency check between two labellers, the blade rule (hypothesis 1 in `error_analysis.md`),
 deliberately labelled blurred and airborne pucks or blur augmentation (hypothesis 2), and more
 far-away pucks (hypothesis 3).
+
+## E3 – Roboflow v4: the f5070 label fix, old models re-scored and the E2a recipe retrained, 2026-11-13
+
+**Data.** Roboflow v4, generated and exported by Claude Code through the Roboflow connector at
+Andreas' request (same settings as v3: only the tag filter `fillempje`, no preprocessing or
+augmentation, YOLOv8 format). 63 images: 40 with a puck, 23 null. The only change from v3: the
+image f5070 (a stick blade labelled as puck, P1) is no longer in the project. Finn removed it
+instead of marking it null, so it is gone as a negative too.
+
+The blade rule decided by Andreas the same day (`annotation.md`) writes down what round 2 already
+did, so no other label changed.
+
+Command (RTX 4060 Laptop):
+```
+python scripts/make_puck_dataset.py --export data/roboflow/pluhchallenge_v4 --val-from-frame 4200 --name fillempje_v4_tiles640
+```
+- train: 39 frames → 248 / 624 tiles, **byte-identical to `fillempje_v3_tiles640`** (checked with
+  md5 over all images and labels): f5070 was a val frame, so train did not change.
+- val: 24 frames (9 pucks, 15 null) → 192 tiles, 28 with a puck (v3: 25 frames, 200 tiles, 30).
+
+So v4 only changes how models are **scored** and which epoch is picked as `best.pt`.
+
+### Part 1: the existing models re-scored on the v4 val set
+
+```
+python scripts/eval_puck.py --finetuned outputs/train/<run>/weights/best.pt --frames data/puck_tiles/fillempje_v4_tiles640/frames.csv --name v4val_<E1|E2a|E2b>
+python scripts/sweep_conf_nms.py --weights outputs/train/fillempje_v3_yolo26s_puck_640/weights/best.pt --frames data/puck_tiles/fillempje_v4_tiles640/frames.csv --name E2a_v4val
+```
+
+| model | tile val mAP@50 (v3 → v4) | tile val mAP@50:95 (v3 → v4) | full frames TP / FP / FN (v4, 9 pucks) | recall (v3 → v4) | AP@50 full frame (v3 → v4) |
+|---|---|---|---|---|---|
+| baseline | – | – | 0 / 0 / 9 | 0.00 → 0.00 | 0.01 → 0.02 |
+| E1 | – → 0.522 | – → 0.346 | 5 / 2 / 4 | 0.50 → 0.56 | 0.58 → 0.64 |
+| **E2a** | 0.634 → **0.680** | 0.382 → **0.410** | **6 / 1 / 3** | 0.60 → **0.67** | 0.65 → **0.72** |
+| E2b | 0.460 → 0.497 | 0.269 → 0.290 | 7 / 11 / 2 | 0.70 → 0.78 | 0.55 → 0.61 |
+
+- Exactly what P1 predicted: no model put a box on f5070, so removing it removes one false
+  negative from every model and nothing else (the TP and FP counts are unchanged).
+- The ranking of the models does not change. The sweep on v4 gives the same operating point
+  (conf 0.25, tile NMS 0.7, merge NMS 0.3: 6 / 1 / 3, F1 0.75).
+- These are still numbers on the val set that `best.pt` was chosen on, and part of which was built
+  with E1 (A1); the model-free test set remains the open point.
+
+### Part 2: the E2a recipe retrained on v4, 3 seeds
+
+```
+python scripts/train_puck.py --data data/puck_tiles/fillempje_v4_tiles640/data.yaml --seed N --name v4_E2a_sN
+```
+
+RTX 4060 Laptop, 0.43 h per run. Then per run:
+`python scripts/eval_puck.py --finetuned outputs/train/v4_E2a_sN/weights/best.pt --frames data/puck_tiles/fillempje_v4_tiles640/frames.csv --video Video/fillempje.mp4 --name v4_E2a_sN`
+
+| run | best epoch | tile val mAP@50 | tile val mAP@50:95 | full frames TP / FP / FN (9 pucks) | AP@50 full frame | clip frames with a puck |
+|---|---|---|---|---|---|---|
+| v4 seed 0 | 19 | 0.680 | 0.410 | 6 / 1 / 3 | 0.722 | 455 |
+| v4 seed 1 | 26 | 0.604 | 0.377 | 6 / 2 / 3 | 0.642 | 648 |
+| v4 seed 2 | 71 | 0.475 | 0.299 | 6 / 2 / 3 | 0.631 | 747 |
+| **mean ± std** | | **0.586 ± 0.104** | **0.362 ± 0.057** | recall 0.67 ± 0.00, FP 1.7 ± 0.6 | **0.665 ± 0.050** | |
+
+**Observations**
+1. **Seed 0 reproduces the logged E2a exactly.** Same best epoch (19), same tile metrics (0.680 /
+   0.410, equal to the old `best.pt` re-scored on v4 in part 1), same full-frame result (6 / 1 / 3,
+   AP@50 0.722) and the same 455 clip frames. On the same GPU with the same seed and the same train
+   tiles, Ultralytics training is deterministic (`deterministic=True` in `args.yaml`). The run
+   logged in E2 was therefore not a lucky outlier of this machine; S1 on the RTX 2080 Ti differed
+   because the GPU differed.
+2. **The seed spread is again large**, for tile mAP@50 even larger than in S1 (±0.10 against ±0.06),
+   mostly because of seed 2: its best epoch is 71, deep in the overfitting phase. The val set picks
+   the epoch, and with 28 puck boxes it is a noisy judge.
+3. **Full frames are stable:** all three seeds find the same 6 of 9 pucks; they differ only in the
+   false positives (1 or 2) and in how often they fire on the clip (455 to 747 frames). Same pattern
+   as S1.
+4. Against S1 (E2a on v3, other GPU): AP@50 on full frames 0.665 ± 0.050 against 0.593 ± 0.020. Most
+   of the difference is the removed f5070 miss (one FN fewer = +0.07 recall per run), not a better
+   model.
+
+**Conclusion:** the f5070 fix changes the numbers, not the model. The honest summary of the E2a recipe
+on v4: **tile mAP@50 0.59 ± 0.10, mAP@50:95 0.36 ± 0.06, full-frame recall 6/9 in every seed, AP@50
+0.67 ± 0.05.** The app keeps the original E2a weights (identical to v4 seed 0: the fewest false
+positives). The next gain still has to come from more and harder labels and a model-free test set.
