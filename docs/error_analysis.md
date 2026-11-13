@@ -68,7 +68,7 @@ The number of found pucks is 6 in every cell: NMS never removed a correct detect
 
 ### Observations
 
-1. **The merge NMS is essential.** Without it, AP@50 drops from 0.65 to 0.41 and the false
+1. **The merge NMS is essential.** Without it (tile NMS at its default 0.7), AP@50 drops from 0.65 to 0.40 and the false
    positives go from 1 to 13. 11 of those 13 are of the type *duplicate*: the same puck found by
    two overlapping tiles. The other 2 are background boxes on frames without a puck (probably the
    blade spot of f4290 found by two tiles; not checked one by one).
@@ -143,4 +143,4 @@ on the current val set.
 - [ ] Look at `outputs/sweep/E2a_val/errors.jpg` and fill in `category` in `errors.csv`; correct
       the types in the table above where you disagree.
 - [ ] Do the same for the false positives of the seed runs (`outputs/eval_puck/seed_*`, on Finn's PC).
-- [ ] Add the experiment entry to `docs/experiments.md` when this branch is merged.
+- [x] Experiment entry in `docs/experiments.md`: P1.

@@ -873,3 +873,71 @@ frame, puck shown in 95 of 300 frames (58 of them predicted).
   cut boxes end at y = 1075–1078 (of 1080); real feet near the edge ended at 1043 and 1057.
   The position itself is not corrected.
 - A legend under the minimap, and the people count split per colour group.
+
+## P1 – Post-processing sweep (confidence + NMS) and error analysis of E2a, 2026-11-13
+
+**Goal:** `eval_puck.py` and the app use one fixed setting (conf 0.25, NMS 0.7 inside a tile, 0.3
+between tiles). Measure what the confidence threshold and the two NMS steps cost or gain (course
+deck 5, slide 39 and discussion question 6), and find out which errors of E2a a threshold could
+fix and which come from the data. Full analysis: [`error_analysis.md`](error_analysis.md).
+
+Command (RTX 4060 Laptop, Zjef, Ultralytics 8.4.211, 22 s):
+```
+python scripts/sweep_conf_nms.py --weights outputs/train/fillempje_v3_yolo26s_puck_640/weights/best.pt --frames data/puck_tiles/fillempje_v3_tiles640/frames.csv --name E2a_val
+```
+
+**Setup**
+- E2a weights from the team's `outputs/`; the 25 val frames of Roboflow v3 (10 pucks, 15 without).
+- The tiles were rebuilt on this PC from a fresh Roboflow v3 export (YOLOv8 format) with the
+  E2a command of E2. Same counts as logged (248 / 624 train tiles, 200 val tiles with 30 pucks),
+  and E2a's `best.pt` validates on them at mAP@50 0.634 / mAP@50:95 0.382, as in E2.
+- Grid: tile NMS (Ultralytics `iou`) 0.3 / 0.5 / 0.7 / 0.9 × merge NMS (`cv2.dnn.NMSBoxes`)
+  0.1 / 0.3 / 0.5 / 0.7 / 0.9 / none × conf 0.05 … 0.90. Our weights have `end2end=False`, so the
+  tile NMS is classic NMS.
+- False positives get a type (slide 37): duplicate (second box on a found puck), localization
+  (on an unfound puck, IoU < 0.5) or background.
+- **Sanity check:** at the `eval_puck.py` settings the sweep gives 6 TP / 1 FP / 4 FN and AP@50
+  0.65, identical to the E2a row of E2.
+
+**Results**
+
+| setting | AP@50 | TP / FP / FN at conf 0.25 |
+|---|---|---|
+| tile 0.7, merge 0.3 (current) | 0.65 | 6 / 1 / 4 |
+| tile 0.3–0.9, merge 0.1–0.5 | 0.65 | 6 / 1 / 4 |
+| tile 0.7, merge 0.9 | 0.59 | 6 / 2 / 4 |
+| tile 0.7, no merge NMS | 0.40 | 6 / 13 / 4 (11 FP duplicates) |
+| tile 0.9, no merge NMS | 0.35 | 6 / 28 / 4 (24 FP duplicates) |
+
+| conf (tile 0.7, merge 0.3) | 0.05 – 0.25 | 0.30 | 0.35 | 0.40 – 0.60 | 0.70 | ≥ 0.75 |
+|---|---|---|---|---|---|---|
+| TP / FP / FN | 6 / 1 / 4 | 5 / 1 / 5 | 4 / 1 / 6 | 3 / 0 / 7 | 1 / 0 / 9 | 0 / 0 / 10 |
+| F1 | **0.71** | 0.63 | 0.53 | 0.46 | 0.18 | 0 |
+
+**Observations**
+1. **The merge NMS between tiles is essential:** without it AP@50 drops from 0.65 to 0.40. The extra
+   false positives are almost all duplicates, the same puck found by two overlapping tiles
+   (slide 38, type 3). This comes from our tiling design, not from the model.
+2. **The exact NMS value does not matter for the puck** as long as both steps are ≤ 0.7: there is
+   only one puck, so NMS never suppressed a correct detection (6 TP in every cell).
+3. **No confidence threshold recovers the 4 missed pucks:** the result is the same from 0.05 to
+   0.25, so these pucks get no box at all with a score ≥ 0.05. Raising conf to 0.40 removes the
+   one false positive (0.39) but also 3 of the 6 found pucks. Conf 0.25 is the knee of the curve.
+4. **The 5 errors at the operating point** (`errors.jpg`; types are a visual check by Claude Code,
+   **not yet confirmed by a team member**):
+   - false positive f4290: the toe of a stick blade, on a frame without a puck;
+   - missed f4590: a puck touching the blade;
+   - missed f5070: a streaked puck in front of the boards (motion blur);
+   - missed f4950: an elongated puck at waist height between two players (blur, probably airborne, crowded);
+   - missed f4500: a puck of about 6 px at mid-ice (small object).
+
+   The first two follow from the blade labelling rule (E2, round 2). The other three follow from the
+   round-1 proposal filters, which only proposed compact, sharp blobs on open ice.
+5. **Limits:** 10 pucks; the settings are chosen and scored on the same val frames, part of which
+   were built with E1 (A1, finding 4). To be repeated on the model-free test set.
+
+**Conclusion:** the current post-processing (conf 0.25, tile NMS 0.7, merge NMS 0.3) stays, now
+justified by measurement. All five errors of E2a are data problems, not threshold problems. The
+next gains have to come from labels: the blade rule (hypothesis 1 in `error_analysis.md`),
+deliberately labelled blurred and airborne pucks or blur augmentation (hypothesis 2), and more
+far-away pucks (hypothesis 3).

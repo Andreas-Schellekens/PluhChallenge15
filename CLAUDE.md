@@ -23,7 +23,7 @@ Scope: planar sports only (soccer, basketball, tennis, ice/field hockey), single
 
 Done and logged: baseline (E0, E0-B), 64 reviewed frames in two rounds, fine-tuning (E1, E2a, E2b; best = E2a), seed study (S1: the E2a recipe gives mAP@50 0.56 ± 0.06 over 3 seeds, the logged 0.634 is the best run; hard negatives do not help), homography (H3), Streamlit app, and two Extra Mile tracks: tracking (T1/T2) and team colours + heatmaps (TM1). The audit of 2026-11-11 (A1 in the log) lists what was wrong and what was changed.
 
-Experiment IDs: E = puck detector, H = homography, T = tracking, TM = teams, S = seed study, A = audit.
+Experiment IDs: E = puck detector, H = homography, T = tracking, TM = teams, S = seed study, A = audit, P = post-processing (conf/NMS) and error analysis.
 
 Open, and to be done by the team (not by an AI):
 - Decide the labelling rule for a puck touching the stick blade, then relabel and retrain. It is the main false positive of every model.

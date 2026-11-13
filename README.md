@@ -24,7 +24,7 @@ Main clip since 2026-10-30: `Video/fillempje.mp4` (static camera behind the goal
 | Extra Mile: tracking (T1, T2) | Done: ByteTrack player IDs + Kalman filter for the puck (puck on the minimap in 18% → 42% of frames). `scripts/track.py`, app tab Tracking |
 | Extra Mile: team colours (TM1) | Done: K-means on jersey colours splits white / blue / bystanders (95.5% on a 110-crop sample), plus occupancy heatmaps. `scripts/teams.py`, app tab Teams |
 | Review (A1) | 2026-11-11: code and log audited; the errors found are listed in the log with what was done about each |
-| Error analysis + conf/NMS sweep | 2026-11-13: confidence and both NMS steps measured for E2a (merge NMS essential: AP@50 0.65 → 0.41 without it; no threshold recovers the missed pucks, so conf 0.25 / NMS 0.7 / 0.3 stay). Errors sorted by the course's slide-38 categories and linked to annotation choices. See [`docs/error_analysis.md`](docs/error_analysis.md). Open: a team member confirms the error types |
+| Error analysis + conf/NMS sweep | 2026-11-13: confidence and both NMS steps measured for E2a (merge NMS essential: AP@50 0.65 → 0.40 without it; no threshold recovers the missed pucks, so conf 0.25 / NMS 0.7 / 0.3 stay). Errors sorted by the course's slide-38 categories and linked to annotation choices. See [`docs/error_analysis.md`](docs/error_analysis.md). Open: a team member confirms the error types |
 
 ## Repository layout
 
