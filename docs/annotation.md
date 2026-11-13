@@ -8,7 +8,8 @@ Still open, and to be done by the team itself (see the last section, "Open point
 1. the rules below were proposed by Claude Code and applied by one reviewer; the team has not
    confirmed them yet;
 2. a puck touching the stick blade: label it or not;
-3. the consistency check between two labellers (rule 5) has not been done.
+3. the consistency check between two labellers (rule 5) has not been done. *(Update 2026-11-13:
+   done for 10 frames, agreement is low; see "Consistency check, round 1" at the end.)*
 
 ## Setup
 
@@ -276,8 +277,8 @@ What the assignment asks under "label consistency as a team" and what we have:
 |---|---|
 | labelling rules | written down (above), applied in both rounds, **not yet confirmed by the whole team** |
 | occlusion handling | rule: label when ≥ 50% of the puck is visible; hidden puck → frame marked null (23 frames). The same 50% rule cuts labels at tile edges (`make_puck_dataset.py`) |
-| consistency between labellers | **not measured.** Every label was reviewed by one person (Andreas). To do: a second team member labels the same 10 frames without seeing the first labels; compare with IoU and count the disagreements |
-| puck at the stick blade | **not decided.** In practice: not labelled when it is not clearly separate (6 rejected in round 2). This is the main false positive of every model in E2; S1 shows that extra hard negatives do not remove it |
+| consistency between labellers | **measured 2026-11-13 (round 1, 10 frames): low.** Zjef labelled 10 frames blind; same puck (IoU ≥ 0.5) in 0 of the 7 frames where either of us saw one (6 of them have a puck in the team labels), presence agreement 5/10 (this counts the 2 "puck in both" frames as agreeing although the boxes differ, IoU 0 and 0.26, and counts "unsure" as "no puck"). Causes: the blade question, single frames without video, and a different box margin. See the last section |
+| puck at the stick blade | **not decided.** In practice: not labelled when it is not clearly separate (6 rejected in round 2). This is the main false positive of every model in E2; S1 shows that extra hard negatives do not remove it. The consistency check adds: 3 of the 7 disagreements are this question, in both directions (f2700 and f3780 labelled by Andreas, f4530 by Zjef) |
 | train/val split | by time (frames ≥ 4200 = val), no frame or tile is in both (verified 2026-11-11) |
 
 **Two limits of the val set that follow from how it was built** (found in the audit, see
@@ -294,3 +295,76 @@ stand on its own.
 **Dataset size.** 64 reviewed frames is inside the 40–80 the assignment asks, but only 41 of
 them contain a puck. The 23 null frames are useful (they are verified negatives), yet they do
 not teach the model what a puck looks like.
+
+## Consistency check, round 1 (2026-11-13)
+
+**How.** `label_agreement.py pick` chose 10 frames from Roboflow v3 at random (seed 0), 6 with and
+4 without a puck in the team dataset, excluding the 5 frames Zjef had already seen up close in the
+error check (`error_analysis.md`). Zjef labelled them on his own PC with `label_blind.py`: one
+frame at a time, no video, no access to the team labels, using the rules above. `unsure` means
+"not labelled" (rule 3). Then:
+
+```
+python scripts/label_agreement.py compare --a data/roboflow/pluhchallenge_v3 --b data/roboflow/consistency_zjef --name round1
+```
+
+A = the team dataset (AI proposals reviewed and approved by Andreas), B = Zjef, blind.
+Outputs of the command: `outputs/label_agreement/round1/` (`agreement.csv`, `summary.json`,
+`sheet.jpg`). `disagreements.jpg` (the frames 12 before and after each disagreement) was made ad
+hoc during the session on Zjef's PC; no script in the repo makes it, so rerunning the command
+does not reproduce it.
+
+**Result**
+
+| | frames |
+|---|---|
+| puck in both, same puck (IoU ≥ 0.5) | 0 |
+| puck in both, different box or object | 2 (f3720, f4350) |
+| puck only in A | 4 (f450, f2700, f3780, f4200) |
+| puck only in B | 1 (f4530) |
+| no puck in both | 3 (f4320, f4470, f4710) |
+
+Presence agreement (both a puck or both none): 5 of 10. This counts the 2 "puck in both" frames
+as agreeing although the boxes differ (IoU 0 at f3720, 0.26 at f4350), and counts "unsure" as
+"no puck" (f450, f3780). Mean IoU where both labelled: 0.13.
+
+**The disagreements.** Zjef's reasons are his own answers after seeing `disagreements.jpg`; the
+descriptions of what the frames show are Claude's and not yet checked by Andreas.
+
+| frame | A (team) | B (Zjef) | what the frames show | kind of disagreement |
+|---|---|---|---|---|
+| f2700 | puck | no puck | a dark puck at the end of a stick blade, moving with the stick in the frames around it. Zjef: "now I'd say puck" | blade question + single frame without video |
+| f3780 | puck | unsure | a dark spot at the tip of a stick blade | blade question |
+| f4530 | no puck (round 2, "hidden") | puck | a dark spot at the tip of a stick blade. Zjef: "a puck at the blade" | blade question |
+| f450 | puck | unsure | an elongated, blurred dark streak in open ice | motion blur |
+| f4200 | puck | no puck | a puck of a few pixels at the far end; it moves between the neighbouring frames | far / tiny |
+| f3720 | puck (6×6 px) | puck, 139 px away (10×13 px) | two different dark spots; which one is the puck needs the video | two candidates in one frame |
+| f4350 | puck, 15×15 px | puck, 30×28 px, same centre (0.7 px apart) | the same puck; Zjef took a margin on purpose. IoU 0.26 | box size convention (rule 1) |
+
+**What it means**
+1. **Our ground truth is less certain than our metrics suggest.** With two labellers agreeing on
+   the same puck in none of the 7 frames where either saw one, a model scored against one labeller's boxes is also scored
+   against that labeller's choices. This weighs most on mAP@50:95: for f4350 even the same puck
+   gives IoU 0.26, and a 2 px shift on a 14 px puck already gives IoU 0.75 (tested with
+   `label_agreement.py`), below the stricter thresholds of mAP@50:95.
+2. **The blade question is the main source of disagreement between people too** (3 of 7),
+   exactly as it is the main false positive of the models (E2, P1). It cannot be fixed by more
+   data; it needs a decision. Both labellers went both ways: Andreas approved a puck at the blade
+   in round 1 (f2700) and in round 2 (f3780), while rejecting 6 other blade cases in round 2 and
+   marking f4530 as "no puck"; Zjef saw no puck at f2700 but labelled one at f4530.
+3. **One frame is not enough to decide.** At f2700 Zjef changed his mind after seeing the
+   neighbouring frames. Rule 3 already says to check ±10 frames when unsure; the blind tool did
+   not offer that. Next round: show the video around the frame.
+4. **Box size needs a number.** Rule 1 says "about 3 px around the dark core". Zjef's margin was
+   about 7 px on each side. Writing it as "box = puck + 2 px on each side" and checking it makes
+   boxes comparable.
+
+**Proposed decisions for the team** (not decided yet):
+- the blade rule, as one sentence that both labellers apply the same way;
+- the ±10 frames check becomes part of every labelling decision (also in the blind tool);
+- box margin: 2 px on each side of the visible puck;
+- then repeat this check on 10 new frames (`pick --seed 1`), ideally with a third person, and
+  record the second round here.
+
+Limits: 10 frames, one pair of labellers, and A is not a pure human labelling (AI proposals that
+Andreas reviewed), so A and B were made in different ways.

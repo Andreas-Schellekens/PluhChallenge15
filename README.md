@@ -17,13 +17,15 @@ Main clip since 2026-10-30: `Video/fillempje.mp4` (static camera behind the goal
 | Part | Status |
 |---|---|
 | Pretrained baseline (E0, E0-B) | Done: players OK, puck in only 10/2548 frames (high precision, almost no recall). See [`docs/experiments.md`](docs/experiments.md) |
-| Puck annotation (40–80 frames) | 64 human-reviewed frames: 41 with a puck + 23 verified without (2 rounds). See [`docs/annotation.md`](docs/annotation.md). Open: team-wide labelling rule for a puck at the stick blade, and a consistency check between two labellers |
+| Puck annotation (40–80 frames) | 64 human-reviewed frames: 41 with a puck + 23 verified without (2 rounds). See [`docs/annotation.md`](docs/annotation.md). Consistency check (2026-11-13, 10 frames, blind second labeller): low agreement, mostly the blade question. Open: team-wide labelling rule for a puck at the stick blade, box margin, second check round |
 | Puck fine-tuning + mAP@50 / mAP@50:95 | Done (E1, E2a, E2b, seed study S1). Best: E2a, tile val mAP@50 0.634 / mAP@50:95 0.382 for the run we use; over 3 seeds the same recipe gives 0.56 ± 0.06 / 0.31 ± 0.01. Full frames: recall 0/10 → 6/10 (in every seed) with 1 to 4 false positives, AP@50 0.01 → 0.65 (seed mean 0.59) vs baseline. Hard negatives gave no gain (S1) |
 | Homography + rink minimap | Done (H3): lens correction + 6 keypoints fitted in pixels, IIHF template. Near the camera good to decimetres, beyond the centre line only to several metres |
 | Streamlit dashboard | Done: `streamlit run app.py`, all parameters adjustable, clips can be added from the sidebar |
 | Extra Mile: tracking (T1, T2) | Done: ByteTrack player IDs + Kalman filter for the puck (puck on the minimap in 18% → 42% of frames). `scripts/track.py`, app tab Tracking |
 | Extra Mile: team colours (TM1) | Done: K-means on jersey colours splits white / blue / bystanders (95.5% on a 110-crop sample), plus occupancy heatmaps. `scripts/teams.py`, app tab Teams |
 | Review (A1) | 2026-11-11: code and log audited; the errors found are listed in the log with what was done about each |
+| Error analysis + conf/NMS sweep | 2026-11-13: confidence and both NMS steps measured for E2a (merge NMS essential: AP@50 0.65 → 0.40 without it; no threshold recovers the missed pucks, so conf 0.25 / NMS 0.7 / 0.3 stay). Errors sorted by the course's slide-38 categories and linked to annotation choices. See [`docs/error_analysis.md`](docs/error_analysis.md). Error types checked by Zjef: the val "puck" at f5070 is a stick blade (label error, to fix in v4) |
+
 ## Repository layout
 
 ```
@@ -43,6 +45,9 @@ scripts/
   make_puck_dataset.py       Roboflow export -> tiled dataset with a time-based train/val split
   train_puck.py              fine-tune YOLO26 on the puck tiles
   eval_puck.py               baseline vs fine-tuned on full frames: confusion matrix, AP50, examples
+  sweep_conf_nms.py          confidence threshold + tile/merge NMS sweep, FP types, crop sheet of every error
+  label_agreement.py         consistency check between two labellers: pick blind frames, compare with IoU
+  label_blind.py             label those frames locally (click + zoom + drag), without seeing the team labels
   calibrate_lens.py          plumb-line scan for the lens parameter k1 (H4)
   homography.py              image -> rink mapping (lens correction, homography, camera motion), minimap video
   pipeline.py                per-frame glue used by the app: detect -> map -> draw
@@ -53,6 +58,7 @@ configs/
 docs/
   experiments.md             experiment log: one entry per run (config, results, conclusions)
   annotation.md              puck labelling rules, review status and split plan
+  error_analysis.md          puck detector errors by type (course slide 38) + the conf/NMS sweep
   genai.md                   how GenAI was used, what the team checked (draft, to complete)
 Video/                       input clips              (not in git; share via the team drive)
 data/                        annotated datasets       (not in git)
@@ -165,7 +171,31 @@ python scripts/teams.py --video Video/fillempje.mp4 --players outputs/track/fill
 python scripts/seed_summary.py --variant E2a seed_E2a_s0 seed_E2a_s1 seed_E2a_s2 --variant E2c seed_E2c_s0 seed_E2c_s1 seed_E2c_s2
 ```
 
-Moving the project to another PC: the `data.yaml` files in `data/puck_tiles/*/` hold an absolute path. Change the `path:` line to your own folder, or rebuild the dataset with `make_puck_dataset.py`.
+7. Error analysis: sweep the confidence threshold and both NMS steps, and get a crop of every error (see [`docs/error_analysis.md`](docs/error_analysis.md)). Run it again with the test set's `frames.csv` once that exists:
+
+```bash
+python scripts/sweep_conf_nms.py --weights outputs/train/fillempje_v3_yolo26s_puck_640/weights/best.pt --frames data/puck_tiles/fillempje_v3_tiles640/frames.csv --name E2a_val
+```
+
+8. Consistency check between two labellers (`annotation.md`, rule 5). Pick 10 frames and write them without labels (exclude frames the second labeller has already seen up close):
+
+```bash
+python scripts/label_agreement.py pick --export data/roboflow/pluhchallenge_v3 --n 10 --exclude 4290 4500 4590 4950 5070 --name round1
+```
+
+The second labeller labels them with the rules of `annotation.md`, without looking at the team dataset. Locally, with no change to the Roboflow project (click the puck, drag a box in the zoom window; `n` = no puck, `u` = unsure, `q` = stop and continue later):
+
+```bash
+python scripts/label_blind.py --frames data/consistency/round1 --labeller zjef
+```
+
+(Or upload the frames to a separate Roboflow project and export in YOLOv8 format.) Then:
+
+```bash
+python scripts/label_agreement.py compare --a data/roboflow/pluhchallenge_v3 --b data/roboflow/consistency_zjef --name round1
+```
+
+Moving the project to another PC: the `data.yaml` files in `data/puck_tiles/*/` hold an absolute path. Change the `path:` line to your own folder, or rebuild the dataset with `make_puck_dataset.py`. Rebuilding from the Roboflow v3 export (YOLOv8 format) gives exactly the same tiles: E2a's `best.pt` validates at the logged 0.634 / 0.382 on them (checked 2026-11-13).
 
 ## Team conventions
 
