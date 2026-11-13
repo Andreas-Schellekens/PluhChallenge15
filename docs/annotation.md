@@ -365,7 +365,7 @@ descriptions of what the frames show are Claude's and not yet checked by Andreas
    about 7 px on each side. Writing it as "box = puck + 2 px on each side" and checking it makes
    boxes comparable.
 
-**Proposed decisions for the team** (decided 2026-11-13, see "Decisions after round 1" below):
+**Proposed decisions for the team** (2026-11-13: all adopted except the blade rule, which is not taken up for now; see "Decisions after round 1" below):
 - the blade rule, as one sentence that both labellers apply the same way;
 - the ±10 frames check becomes part of every labelling decision (also in the blind tool);
 - box margin: 2 px on each side of the visible puck;
