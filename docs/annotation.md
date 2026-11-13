@@ -13,7 +13,7 @@ Still open, and to be done by the team itself (see the last section, "Open point
 
 *Update 2026-11-13 (Finn):* rules 1 (box margin) and 3 (±10 frames) are decided, a second
 consistency round is agreed, and the f5070 label is fixed in Roboflow. See "Decisions after
-round 1" at the end. The blade question (point 2) is not taken up for now.
+round 1" at the end. The blade question (point 2) was decided by Andreas the same day: a puck touching the stick blade is labelled only when it can be told apart from the blade (in the frame itself or in the ±10 neighbouring frames); when it really cannot, it is not labelled.
 
 ## Setup
 
@@ -284,7 +284,7 @@ What the assignment asks under "label consistency as a team" and what we have:
 | labelling rules | written down (above), applied in both rounds, **not yet confirmed by the whole team**. *2026-11-13: rule 1 (2 px margin) and rule 3 (±10 frames) decided by Finn* |
 | occlusion handling | rule: label when ≥ 50% of the puck is visible; hidden puck → frame marked null (23 frames). The same 50% rule cuts labels at tile edges (`make_puck_dataset.py`) |
 | consistency between labellers | **measured 2026-11-13 (round 1, 10 frames): low.** Zjef labelled 10 frames blind; same puck (IoU ≥ 0.5) in 0 of the 7 frames where either of us saw one (6 of them have a puck in the team labels), presence agreement 5/10 (this counts the 2 "puck in both" frames as agreeing although the boxes differ, IoU 0 and 0.26, and counts "unsure" as "no puck"). Causes: the blade question, single frames without video, and a different box margin. See the last section |
-| puck at the stick blade | **not decided** (2026-11-13: not taken up for now, see "Decisions after round 1"). In practice: not labelled when it is not clearly separate (6 rejected in round 2). This is the main false positive of every model in E2; S1 shows that extra hard negatives do not remove it. The consistency check adds: 3 of the 7 disagreements are this question, in both directions (f2700 and f3780 labelled by Andreas, f4530 by Zjef) |
+| puck at the stick blade | **decided 2026-11-13 (Andreas):** a puck touching the stick blade is labelled only when it can be told apart from the blade (in the frame itself or in the ±10 neighbouring frames); when it really cannot, it is not labelled. This is the round-2 practice written down as a rule. In practice: not labelled when it is not clearly separate (6 rejected in round 2). This is the main false positive of every model in E2; S1 shows that extra hard negatives do not remove it. The consistency check adds: 3 of the 7 disagreements are this question, in both directions (f2700 and f3780 labelled by Andreas, f4530 by Zjef) |
 | train/val split | by time (frames ≥ 4200 = val), no frame or tile is in both (verified 2026-11-11) |
 
 **Two limits of the val set that follow from how it was built** (found in the audit, see
@@ -365,7 +365,7 @@ descriptions of what the frames show are Claude's and not yet checked by Andreas
    about 7 px on each side. Writing it as "box = puck + 2 px on each side" and checking it makes
    boxes comparable.
 
-**Proposed decisions for the team** (2026-11-13: all adopted except the blade rule, which is not taken up for now; see "Decisions after round 1" below):
+**Proposed decisions for the team** (all adopted on 2026-11-13; see "Decisions after round 1" below):
 - the blade rule, as one sentence that both labellers apply the same way;
 - the ±10 frames check becomes part of every labelling decision (also in the blind tool);
 - box margin: 2 px on each side of the visible puck;
@@ -379,7 +379,7 @@ Andreas reviewed), so A and B were made in different ways.
 
 | proposal | decision |
 |---|---|
-| blade rule | **not taken up for now.** The practice of round 2 stays: a puck that is not clearly separate from the blade is only labelled when the neighbouring frames show it is the puck. It stays the main known source of disagreement and false positives |
+| blade rule | *First "not taken up for now" (Finn); decided later the same day by Andreas:* a puck touching the stick blade is labelled only when it can be told apart from the blade (in the frame itself or in the ±10 neighbouring frames); when it really cannot, it is not labelled. This is the round-2 practice made explicit. It stays the main known source of disagreement and false positives, because "can be told apart" is still a judgement |
 | ±10 frames check | **adopted** (rule 3). `label_blind.py` now shows these frames when it gets the clip: `--video Video/fillempje.mp4`, key `v` |
 | box margin | **adopted**: visible puck + 2 px on each side (rule 1). `label_blind.py` adds the margin itself (`--margin 2`, the default) |
 | second consistency round | **agreed**, on 10 new frames, ideally with a third person |
@@ -406,5 +406,5 @@ python scripts/label_agreement.py compare --a data/roboflow/pluhchallenge_v4 --b
 
 What to expect if the decisions work: fewer "one frame is not enough" disagreements (f2700-like)
 and higher IoU when both see the same puck (f4350-like). Blade disagreements will stay, because
-the blade rule is not decided. Note that labeller A (the team dataset) did not use the 2 px rule
+the blade rule leaves a judgement call ("can it be told apart?"). Note that labeller A (the team dataset) did not use the 2 px rule
 for every box, so box-size differences can remain on A's side; record that with the result.
