@@ -39,7 +39,7 @@ Outputs (in outputs/homography/<run-name>/, ignored by git):
   summary.json         config, reprojection error, matching statistics
 
 Usage:
-  python scripts/homography.py --video Video/fillempje.mp4 --keypoints configs/keypoints_fillempje.json \\
+  python scripts/homography.py --video Video/hockey_static_1080p.mp4 --keypoints configs/keypoints_hockey_static_1080p.json \\
       --detections outputs/baseline/fillempje_yolo26s_1280/detections.csv --drift none
 """
 

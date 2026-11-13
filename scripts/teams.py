@@ -39,7 +39,7 @@ Outputs (outputs/teams/<name>/, ignored by git):
   heatmaps.jpg     occupancy per group on the rink
 
 Usage:
-  python scripts/teams.py --video Video/fillempje.mp4 --players outputs/track/fillempje_teams/players.csv --keypoints configs/keypoints_fillempje.json --name fillempje
+  python scripts/teams.py --video Video/hockey_static_1080p.mp4 --players outputs/track/fillempje_teams/players.csv --keypoints configs/keypoints_hockey_static_1080p.json --name fillempje
 """
 
 import argparse

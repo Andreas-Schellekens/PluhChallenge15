@@ -1,5 +1,5 @@
 {
-  "video": "Video/fillempje.mp4",
+  "video": "Video/hockey_static_1080p.mp4",
   "reference_frame": 1800,
   "rink": "iihf",
   "lens": {"k1": -0.125, "f": 1000, "center": [960, 540]},

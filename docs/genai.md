@@ -16,7 +16,7 @@ team.** Check it against the course GenAI policy for any required format or word
 
 | part | what the AI did | what the team decided or checked |
 |---|---|---|
-| Scope and data | – | chose ice hockey; switched to `fillempje.mp4` because the 4K clip was handheld and showed few pucks; processed the teacher feedback (fine-tune + comparison, working homography, frontend with parameters) |
+| Scope and data | – | chose ice hockey; switched to `fillempje.mp4` (renamed `hockey_static_1080p.mp4` on 2026-11-13) because the 4K clip was handheld and showed few pucks; processed the teacher feedback (fine-tune + comparison, working homography, frontend with parameters) |
 | Baseline (E0, E0-B) | wrote `baseline.py`, ran it, summarised the numbers | – |
 | Labelling (rounds 1 and 2) | proposed candidates: background subtraction (`propose_puck.py`), later our own model (`propose_model.py`); sorted them into confident / unsure / wrong; uploaded them as **predictions to Roboflow Review** | **Andreas reviewed every label**: approved, rejected, moved or drew boxes, and checked 24 frames by hand (23 marked null). No AI label entered the dataset without human approval |
 | Labelling rules | drafted the rules (box size, ≥ 50% visible, null images, time split) | to be confirmed by the team; open question: does a puck touching the stick blade count |

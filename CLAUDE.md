@@ -10,7 +10,7 @@ Pipeline: `.mp4` clip → object detection (players/referees + fine-tuned small 
 
 Scope: planar sports only (soccer, basketball, tennis, ice/field hockey), single static camera angle.
 
-**Our choice: ice hockey.** Main clip (since 2026-10-30): `Video/fillempje.mp4` (1920×1080, 59.94 fps, ~85 s, amateur game, static wide-angle action camera behind the near goal). The data gap is the **puck**: about 6–10 px, found by COCO YOLO in only 10/2548 frames (E0-B). Players and referees use pretrained COCO `person`. The homography needs lens correction (k1) and an IIHF rink template in metres; it uses 6 keypoints fitted in pixels (H3) and is only coarse (several metres) beyond the centre line. The first clip `Video/hockey_clip_4k_noaudio.mp4` (4K, handheld) is kept as experiment history (E0, H1).
+**Our choice: ice hockey.** Main clip (since 2026-10-30): `Video/hockey_static_1080p.mp4`, config `configs/keypoints_hockey_static_1080p.json` (called `fillempje` until 2026-11-13; run folders, datasets and the Roboflow tag keep that old name; 1920×1080, 59.94 fps, ~85 s, amateur game, static wide-angle action camera behind the near goal). The data gap is the **puck**: about 6–10 px, found by COCO YOLO in only 10/2548 frames (E0-B). Players and referees use pretrained COCO `person`. The homography needs lens correction (k1) and an IIHF rink template in metres; it uses 6 keypoints fitted in pixels (H3) and is only coarse (several metres) beyond the centre line. The first clip `Video/hockey_clip_4k_noaudio.mp4` (4K, handheld) is kept as experiment history (E0, H1).
 
 ## Repository layout
 

@@ -12,7 +12,7 @@ We take an ice hockey clip, detect players, referees and the **puck**, and proje
 
 ## Status
 
-Main clip since 2026-10-30: `Video/fillempje.mp4` (static camera behind the goal, 1080p). The first clip (`hockey_clip_4k_noaudio.mp4`, handheld 4K) is kept as experiment history.
+Main clip since 2026-10-30: `Video/hockey_static_1080p.mp4` (static camera behind the goal, 1080p; called `fillempje.mp4` until 2026-11-13, see below). The first clip (`hockey_clip_4k_noaudio.mp4`, handheld 4K) is kept as experiment history.
 
 | Part | Status |
 |---|---|
@@ -53,7 +53,7 @@ scripts/
   pipeline.py                per-frame glue used by the app: detect -> map -> draw
   rink.py                    NHL (ft) and IIHF (m) rink templates and minimap drawing
 configs/
-  keypoints_fillempje.json        rink keypoints + lens model for the main clip
+  keypoints_hockey_static_1080p.json   rink keypoints + lens model for the main clip
   keypoints_hockey_clip_4k.json   same for the first clip
 docs/
   experiments.md             experiment log: one entry per run (config, results, conclusions)
@@ -97,7 +97,9 @@ python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_
 
 No NVIDIA GPU? Install torch without `--index-url`. Everything still works, just slower.
 
-Then put the clips in `Video/` (from the team drive): `fillempje.mp4` (main) and `hockey_clip_4k_noaudio.mp4`.
+Then put the clips in `Video/` (from the team drive): `hockey_static_1080p.mp4` (main) and `hockey_clip_4k_noaudio.mp4`.
+
+**Renamed 2026-11-13.** The main clip used to be `fillempje.mp4`. Rename your local copy to `Video/hockey_static_1080p.mp4` (the app also still recognises the old name). Run folders, datasets and the Roboflow tag keep the old name (`outputs/*/fillempje_*`, `data/frames/fillempje`, `data/puck_tiles/fillempje_*`), because the experiment log refers to them.
 
 ## Usage
 
@@ -112,17 +114,17 @@ The steps behind it, in order. Every command is also logged in `docs/experiments
 1. Pretrained baseline: person boxes for the homography, and the "sports ball" reference for the puck.
 
 ```bash
-python scripts/baseline.py --video Video/fillempje.mp4 --imgsz 1280 --stride 2 --name fillempje_yolo26s_1280
+python scripts/baseline.py --video Video/hockey_static_1080p.mp4 --imgsz 1280 --stride 2 --name fillempje_yolo26s_1280
 ```
 
 2. Frames for annotation (every 0.5 s), then puck candidates for assisted labelling:
 
 ```bash
-python scripts/extract_frames.py --video Video/fillempje.mp4 --stride 30 --start 1.0
+python scripts/extract_frames.py --video Video/hockey_static_1080p.mp4 --stride 30 --start 1.0 --out data/frames/fillempje
 ```
 
 ```bash
-python scripts/propose_puck.py --video Video/fillempje.mp4 --frames data/frames/fillempje --detections outputs/baseline/fillempje_yolo26s_1280/detections.csv
+python scripts/propose_puck.py --video Video/hockey_static_1080p.mp4 --frames data/frames/fillempje --detections outputs/baseline/fillempje_yolo26s_1280/detections.csv
 ```
 
 3. After the Roboflow review: export the version (YOLO format, no resize), tile it, train, compare:
@@ -146,23 +148,23 @@ python scripts/train_puck.py --data data/puck_tiles/fillempje_tiles640/data.yaml
 ```
 
 ```bash
-python scripts/eval_puck.py --finetuned outputs/train/fillempje_yolo26s_puck_640/weights/best.pt --frames data/puck_tiles/fillempje_tiles640/frames.csv --video Video/fillempje.mp4 --name fillempje
+python scripts/eval_puck.py --finetuned outputs/train/fillempje_yolo26s_puck_640/weights/best.pt --frames data/puck_tiles/fillempje_tiles640/frames.csv --video Video/hockey_static_1080p.mp4 --name fillempje
 ```
 
 4. Homography and minimap video for the whole clip (add `--name fillempje_6pt` to keep the H3 run apart):
 
 ```bash
-python scripts/homography.py --video Video/fillempje.mp4 --keypoints configs/keypoints_fillempje.json --detections outputs/baseline/fillempje_yolo26s_1280/detections.csv --drift none
+python scripts/homography.py --video Video/hockey_static_1080p.mp4 --keypoints configs/keypoints_hockey_static_1080p.json --detections outputs/baseline/fillempje_yolo26s_1280/detections.csv --drift none
 ```
 
 5. Tracking over the whole clip, then team colours from the tracked boxes:
 
 ```bash
-python scripts/track.py --video Video/fillempje.mp4 --keypoints configs/keypoints_fillempje.json --puck-weights outputs/train/fillempje_v3_yolo26s_puck_640/weights/best.pt --tracker configs/bytetrack_hockey.yaml --name fillempje_teams
+python scripts/track.py --video Video/hockey_static_1080p.mp4 --keypoints configs/keypoints_hockey_static_1080p.json --puck-weights outputs/train/fillempje_v3_yolo26s_puck_640/weights/best.pt --tracker configs/bytetrack_hockey.yaml --name fillempje_teams
 ```
 
 ```bash
-python scripts/teams.py --video Video/fillempje.mp4 --players outputs/track/fillempje_teams/players.csv --keypoints configs/keypoints_fillempje.json --names white other blue --score --name fillempje
+python scripts/teams.py --video Video/hockey_static_1080p.mp4 --players outputs/track/fillempje_teams/players.csv --keypoints configs/keypoints_hockey_static_1080p.json --names white other blue --score --name fillempje
 ```
 
 6. Seed study (S1): train each variant with seeds 0, 1 and 2 (`--seed N --name seed_E2a_sN`), evaluate each with `eval_puck.py`, then:
@@ -189,10 +191,10 @@ The second labeller labels them with the rules of `annotation.md`, without looki
 python scripts/label_blind.py --frames data/consistency/round1 --labeller zjef
 ```
 
-(That is how round 1 was run. From round 2 on, add `--video Video/fillempje.mp4`.)
+(That is how round 1 was run. From round 2 on, add `--video Video/hockey_static_1080p.mp4`.)
 
 ```bash
-python scripts/label_blind.py --frames data/consistency/round2 --labeller <name> --video Video/fillempje.mp4
+python scripts/label_blind.py --frames data/consistency/round2 --labeller <name> --video Video/hockey_static_1080p.mp4
 ```
 
 (Or upload the frames to a separate Roboflow project and export in YOLOv8 format.) Then:
