@@ -308,7 +308,9 @@ with tab_track:
     if not runs_t:
         st.info("No tracking run yet. Run scripts/track.py (see docs/experiments.md, T1).")
     else:
-        run_t = st.selectbox("Tracking run (whole clip)", runs_t, format_func=lambda p: p.parent.name)
+        # default: the current run (T2 in the log), not the alphabetically first one (T1, superseded)
+        run_t = st.selectbox("Tracking run (whole clip)", runs_t, format_func=lambda p: p.parent.name,
+                             index=next((i for i, p in enumerate(runs_t) if p.parent.name == "fillempje_teams"), 0))
         sm = json.loads(run_t.read_text())
         pk, pl = sm["puck"], sm["players"]
         c1, c2, c3 = st.columns(3)
@@ -355,7 +357,9 @@ with tab_eval:
     if not evals:
         st.info("No evaluation yet. Run scripts/eval_puck.py after training (see docs/experiments.md).")
     else:
-        run = st.selectbox("Evaluation run", evals, format_func=lambda p: p.parent.name)
+        # default: E2a on the 25-frame val set (the model the app uses), not E1 on the old 4-frame set
+        run = st.selectbox("Evaluation run", evals, format_func=lambda p: p.parent.name,
+                           index=next((i for i, p in enumerate(evals) if p.parent.name == "v3val_E2a"), 0))
         m = json.loads(run.read_text())
         st.caption(f"Scored on the {m['split']} frames {m['frames']} ({m['pucks']} pucks), "
                    f"conf >= {m['conf']}, IoU >= {m['iou_match']}")

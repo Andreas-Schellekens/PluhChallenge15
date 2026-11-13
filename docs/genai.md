@@ -1,7 +1,7 @@
 # GenAI use
 
 How generative AI was used in this project, what the team decided and checked, and where
-the limits were. **Draft by Claude Code (2026-11-05, updated 2026-11-11), to be completed and confirmed by the
+the limits were. **Draft by Claude Code (2026-11-05, updated 2026-11-11 and 2026-11-13), to be completed and confirmed by the
 team.** Check it against the course GenAI policy for any required format or wording.
 
 ## Tools
@@ -29,6 +29,8 @@ team.** Check it against the course GenAI policy for any required format or word
 | Homography (H3) | found that the far goal landed at about 100 m, measured two more keypoints, changed the fit to pixels | to do: visual check of the new overlay |
 | Team colours (TM1) | wrote `teams.py`; found and fixed the failed first version (features not scaled); **labelled the 120-crop sample itself** | chose team colours as the second Extra Mile; to do: confirm the sample labels |
 | Seed study (S1) | wrote `seed_summary.py`, ran the six training runs, wrote the analysis | to do: look at the false positives of the seed runs (only counted so far) |
+| Local setup on Mihai's PC (2026-11-13) | rebuilt the puck tiles from the Roboflow v3 export, unpacked the team's outputs, re-validated the E2a weights (0.635 / 0.382, same as logged); found that the Quadro T1000 (4 GB) cannot train the puck model in reasonable time (about 45 h per run) | Mihai asked for it and supplied the team's export; the E0 outputs of his original runs (2026-10-16, his PC) confirm the `yolo26s_640` row and the Quadro fps that A1 listed as unverified |
+| Lens calibration (H4, 2026-11-13) | wrote `calibrate_lens.py` (plumb-line scan over k1 with an exact inverse of the lens model), ran it, wrote the H4 entry; found that `Lens.undistort` (5 OpenCV iterations) is up to ~2 px off near the image edge; set the app's Tracking and Puck model tabs to the current runs | Mihai asked for it, after A1 listed the H2 k1 table as unreproducible; to do: visual check of `mask.jpg` and `straightened.jpg`; the team decides whether to fix `Lens.undistort` (it would change T2/TM1 slightly) |
 
 *Team: complete this table with your own contributions (for example Mihai's part, extra
 checks you did yourselves, and decisions made in team meetings).*

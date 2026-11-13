@@ -48,6 +48,7 @@ scripts/
   sweep_conf_nms.py          confidence threshold + tile/merge NMS sweep, FP types, crop sheet of every error
   label_agreement.py         consistency check between two labellers: pick blind frames, compare with IoU
   label_blind.py             label those frames locally (click + zoom + drag), without seeing the team labels
+  calibrate_lens.py          plumb-line scan for the lens parameter k1 (H4)
   homography.py              image -> rink mapping (lens correction, homography, camera motion), minimap video
   pipeline.py                per-frame glue used by the app: detect -> map -> draw
   rink.py                    NHL (ft) and IIHF (m) rink templates and minimap drawing
