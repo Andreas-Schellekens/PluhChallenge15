@@ -11,6 +11,10 @@ Still open, and to be done by the team itself (see the last section, "Open point
 3. the consistency check between two labellers (rule 5) has not been done. *(Update 2026-11-13:
    done for 10 frames, agreement is low; see "Consistency check, round 1" at the end.)*
 
+*Update 2026-11-13 (Finn):* rules 1 (box margin) and 3 (±10 frames) are decided, a second
+consistency round is agreed, and the f5070 label is fixed in Roboflow. See "Decisions after
+round 1" at the end. The blade question (point 2) is not taken up for now.
+
 ## Setup
 
 - Roboflow project `PluhChallenge` (object detection), one class: `puck` (lowercase).
@@ -98,8 +102,10 @@ Only ~40% of checked frames had a clearly findable puck. Many frames hide it beh
 ## Proposed rules (to be decided by the team)
 
 1. **Box size.** Draw the box around the visible puck including its soft edge: about 3 px around the dark core, giving roughly 16–18 × 12–14 px at 4K. Do not include a motion-blur tail. *(Decide: tail in or out?)*
+   *Decided 2026-11-13 (Finn), after consistency round 1: **box = the visible puck + 2 px on each side**, no motion-blur tail. `label_blind.py` adds the 2 px itself: drag tight around the visible puck. In Roboflow, draw the 2 px by hand.*
 2. **Occlusion.** Label when about 50% or more of the puck is visible. *(Decide the threshold.)*
 3. **Uncertain.** If you cannot tell puck from blade tape or a skate, check the neighbouring frames (±10). If it is still unclear, do not label it, and list the frame here.
+   *Decided 2026-11-13 (Finn): the ±10 frames check is part of **every** doubtful decision, not optional. `label_blind.py --video` shows those frames (key `v`).*
 4. **Empty frames.** Only mark a frame as having no puck after a person has looked for it. Keep some verified empty frames in the dataset: they teach the model the look-alikes above.
 5. **Consistency check.** Two people label the same 5–10 frames independently. Compare the boxes (IoU) and the disagreements, and record the result here.
 
@@ -275,10 +281,10 @@ What the assignment asks under "label consistency as a team" and what we have:
 
 | asked | status |
 |---|---|
-| labelling rules | written down (above), applied in both rounds, **not yet confirmed by the whole team** |
+| labelling rules | written down (above), applied in both rounds, **not yet confirmed by the whole team**. *2026-11-13: rule 1 (2 px margin) and rule 3 (±10 frames) decided by Finn* |
 | occlusion handling | rule: label when ≥ 50% of the puck is visible; hidden puck → frame marked null (23 frames). The same 50% rule cuts labels at tile edges (`make_puck_dataset.py`) |
 | consistency between labellers | **measured 2026-11-13 (round 1, 10 frames): low.** Zjef labelled 10 frames blind; same puck (IoU ≥ 0.5) in 0 of the 7 frames where either of us saw one (6 of them have a puck in the team labels), presence agreement 5/10 (this counts the 2 "puck in both" frames as agreeing although the boxes differ, IoU 0 and 0.26, and counts "unsure" as "no puck"). Causes: the blade question, single frames without video, and a different box margin. See the last section |
-| puck at the stick blade | **not decided.** In practice: not labelled when it is not clearly separate (6 rejected in round 2). This is the main false positive of every model in E2; S1 shows that extra hard negatives do not remove it. The consistency check adds: 3 of the 7 disagreements are this question, in both directions (f2700 and f3780 labelled by Andreas, f4530 by Zjef) |
+| puck at the stick blade | **not decided** (2026-11-13: not taken up for now, see "Decisions after round 1"). In practice: not labelled when it is not clearly separate (6 rejected in round 2). This is the main false positive of every model in E2; S1 shows that extra hard negatives do not remove it. The consistency check adds: 3 of the 7 disagreements are this question, in both directions (f2700 and f3780 labelled by Andreas, f4530 by Zjef) |
 | train/val split | by time (frames ≥ 4200 = val), no frame or tile is in both (verified 2026-11-11) |
 
 **Two limits of the val set that follow from how it was built** (found in the audit, see
@@ -359,7 +365,7 @@ descriptions of what the frames show are Claude's and not yet checked by Andreas
    about 7 px on each side. Writing it as "box = puck + 2 px on each side" and checking it makes
    boxes comparable.
 
-**Proposed decisions for the team** (not decided yet):
+**Proposed decisions for the team** (decided 2026-11-13, see "Decisions after round 1" below):
 - the blade rule, as one sentence that both labellers apply the same way;
 - the ±10 frames check becomes part of every labelling decision (also in the blind tool);
 - box margin: 2 px on each side of the visible puck;
@@ -368,3 +374,37 @@ descriptions of what the frames show are Claude's and not yet checked by Andreas
 
 Limits: 10 frames, one pair of labellers, and A is not a pure human labelling (AI proposals that
 Andreas reviewed), so A and B were made in different ways.
+
+## Decisions after round 1 (Finn, 2026-11-13)
+
+| proposal | decision |
+|---|---|
+| blade rule | **not taken up for now.** The practice of round 2 stays: a puck that is not clearly separate from the blade is only labelled when the neighbouring frames show it is the puck. It stays the main known source of disagreement and false positives |
+| ±10 frames check | **adopted** (rule 3). `label_blind.py` now shows these frames when it gets the clip: `--video Video/fillempje.mp4`, key `v` |
+| box margin | **adopted**: visible puck + 2 px on each side (rule 1). `label_blind.py` adds the margin itself (`--margin 2`, the default) |
+| second consistency round | **agreed**, on 10 new frames, ideally with a third person |
+| f5070 (val label on a stick blade, P1) | **fixed in Roboflow** (reported by Finn). The fix goes into dataset v4 |
+
+**Round 2: how to run it.** Export Roboflow v4 (YOLOv8 format, no resize) to
+`data/roboflow/pluhchallenge_v4`, then pick 10 new frames. The excluded frames are the 10 of round 1
+plus the 5 Zjef saw up close in the error check:
+
+```
+python scripts/label_agreement.py pick --export data/roboflow/pluhchallenge_v4 --n 10 --seed 1 --exclude 450 2700 3720 3780 4200 4320 4350 4470 4530 4710 4290 4500 4590 4950 5070 --name round2
+```
+
+The second labeller (someone who has not seen these frames up close) labels them blind, with the
+clip for the ±10 frames check:
+
+```
+python scripts/label_blind.py --frames data/consistency/round2 --labeller <name> --video Video/fillempje.mp4
+```
+
+```
+python scripts/label_agreement.py compare --a data/roboflow/pluhchallenge_v4 --b data/roboflow/consistency_<name> --name round2
+```
+
+What to expect if the decisions work: fewer "one frame is not enough" disagreements (f2700-like)
+and higher IoU when both see the same puck (f4350-like). Blade disagreements will stay, because
+the blade rule is not decided. Note that labeller A (the team dataset) did not use the 2 px rule
+for every box, so box-size differences can remain on A's side; record that with the result.

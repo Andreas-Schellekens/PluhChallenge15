@@ -179,8 +179,10 @@ on the current val set.
 
 - [x] Check the 5 errors of E2a and fill in `category` in `errors.csv` (Zjef, 2026-11-13; his
       filled-in copy is not in the repo, and a rerun writes the column empty again).
-- [ ] **Fix the f5070 label in Roboflow** (stick blade → mark the image null, or move the box if
-      someone finds the real puck), as part of v4. Then rerun `eval_puck.py` and this sweep.
+- [x] **Fix the f5070 label in Roboflow** (stick blade → mark the image null, or move the box if
+      someone finds the real puck), as part of v4. *(Done in Roboflow, reported by Finn 2026-11-13.)*
+- [ ] Export v4, rebuild the tiles (`make_puck_dataset.py`), then rerun `eval_puck.py` and this
+      sweep. Until then all logged val numbers still count f5070 as a puck.
 - [ ] A second person looks at f4950 (Zjef could not tell).
 - [ ] Do the same check for the false positives of the seed runs (`outputs/eval_puck/seed_*`, on Finn's PC).
 - [x] Experiment entry in `docs/experiments.md`: P1.
