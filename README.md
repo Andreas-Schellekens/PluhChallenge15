@@ -17,7 +17,7 @@ Main clip since 2026-10-30: `Video/fillempje.mp4` (static camera behind the goal
 | Part | Status |
 |---|---|
 | Pretrained baseline (E0, E0-B) | Done: players OK, puck in only 10/2548 frames (high precision, almost no recall). See [`docs/experiments.md`](docs/experiments.md) |
-| Puck annotation (40–80 frames) | 64 human-reviewed frames: 41 with a puck + 23 verified without (2 rounds). See [`docs/annotation.md`](docs/annotation.md). Open: team-wide labelling rule for a puck at the stick blade, and a consistency check between two labellers |
+| Puck annotation (40–80 frames) | 64 human-reviewed frames: 41 with a puck + 23 verified without (2 rounds). See [`docs/annotation.md`](docs/annotation.md). Consistency check (2026-11-13, 10 frames, blind second labeller): low agreement, mostly the blade question. Open: team-wide labelling rule for a puck at the stick blade, box margin, second check round |
 | Puck fine-tuning + mAP@50 / mAP@50:95 | Done (E1, E2a, E2b, seed study S1). Best: E2a, tile val mAP@50 0.634 / mAP@50:95 0.382 for the run we use; over 3 seeds the same recipe gives 0.56 ± 0.06 / 0.31 ± 0.01. Full frames: recall 0/10 → 6/10 (in every seed) with 1 to 4 false positives, AP@50 0.01 → 0.65 (seed mean 0.59) vs baseline. Hard negatives gave no gain (S1) |
 | Homography + rink minimap | Done (H3): lens correction + 6 keypoints fitted in pixels, IIHF template. Near the camera good to decimetres, beyond the centre line only to several metres |
 | Streamlit dashboard | Done: `streamlit run app.py`, all parameters adjustable, clips can be added from the sidebar |
