@@ -30,7 +30,7 @@ because the camera moved and the puck was rarely findable.)
 | part of the brief | status | where |
 |---|---|---|
 | 1. targeted annotation (40–80 frames) | 63 human-reviewed frames in the final dataset (40 with a puck, 23 verified empty), 2 assisted rounds, written rules, consistency check between two labellers | §2, `annotation.md` |
-| 2. fine-tuning + mAP | YOLO26s fine-tuned on 640 px tiles; final dataset v4: our model mAP@50 0.680 / mAP@50:95 0.410, over 3 seeds 0.59 ± 0.10 / 0.36 ± 0.06 | §3 |
+| 2. fine-tuning + mAP | YOLO26s fine-tuned on 640 px tiles; final dataset v4: our model mAP@50 0.680 / mAP@50:95 0.410, over 3 seeds 0.59 ± 0.10 / 0.36 ± 0.06; step by step in the training notebook | §3, `notebooks/` |
 | 2. error analysis | conf/NMS sweep, every error typed (course slide 38) and traced to an annotation choice | §4, `error_analysis.md` |
 | 3. homography + minimap | lens correction + 6 keypoints, IIHF template; decimetres near the camera, metres at the far end | §5 |
 | 4. local deployment | Streamlit app, all parameters in the sidebar | §6 |
@@ -49,14 +49,15 @@ because the camera moved and the puck was rarely findable.)
 ## 2. Data and annotation
 
 ### 2.1 The data gap
-The pretrained COCO detector already finds the players well (13.1 persons per frame, mean conf 0.72,
+The pretrained COCO detector already finds the players well (13.1 people per frame, mean conf 0.72,
 E0-B). The puck is the gap: it is 6–10 px near the camera and 2–4 px at the far end. COCO has no puck
-class; "sports ball" fired in only 10 of 2548 frames. Mostly correct, but almost no recall (E0-B).
+class; "sports ball" fired in only 10 of 2548 frames. Those detections were mostly correct, but recall was
+almost zero (E0-B).
 Reason: resizing the 1080p frame to 1280 or 640 leaves the puck smaller than one cell of YOLO's finest
 (stride-8) feature map.
 
 ### 2.2 Assisted labelling (Roboflow)
-Foundation-model auto-labelling in Roboflow (Gemini, SAM 3, GPT) did not work on a 15 px object, so we
+Foundation-model auto-labelling in Roboflow (Gemini, SAM 3, GPT) did not work on such a small object, so we
 built our own proposal steps and sent every proposal to the Roboflow **Review** queue. A person
 approved, moved or rejected each one.
 
@@ -88,14 +89,14 @@ are near-duplicates, so a random split would leak the same puck into train and v
 
 ### 2.5 Consistency between labellers
 Zjef labelled 10 frames blind with `label_blind.py`. Agreement was **low**: the same puck in 0 of the 7
-frames where either of us saw one; agreement on "puck or no puck" in 5 of 10. Causes: the blade question
+frames where at least one of the two labellers saw one; agreement on "puck or no puck" in 5 of 10. Causes: the blade question
 (3 of 7), deciding from one frame without the video, and a different box margin. Decisions after it: the
 2 px margin and the ±10 frames check (now built into the tool), a written blade rule, and a second round
-on new frames.
+on new frames (agreed, not yet done).
 
 ### 2.6 What we would do differently
 - Our proposal filters only found compact, sharp pucks on open ice, so the dataset under-represents
-  pucks at the skates, at the boards, blurred, and far away. Exactly those are missed later (§4).
+  pucks near the skates, at the boards, blurred, and far away. Exactly those are missed later (§4).
 - 15 of the 25 val frames (v3) were chosen *because the E1 model found nothing there*, and 5 of the 6 val
   pucks added in round 2 were E1 proposals. The val set therefore flatters E1 (A1). A test set chosen
   without any model is the fair fix.
@@ -109,6 +110,10 @@ Feeding the whole 1920×1080 frame to YOLO at 640 px shrinks a 6–10 px puck to
 **640×640 tiles at native resolution**, so the puck keeps its real size. At inference the frame is
 covered by a grid of overlapping tiles (overlap 160 px, larger than a puck), and the tile predictions
 are merged with a second NMS step.
+
+The notebook `notebooks/train_puck_detector.ipynb` walks through the whole training and evaluation of
+this section step by step (dataset, training call, curves, validation, full-frame AP@50, seeds), with
+its outputs saved.
 
 ### 3.2 Configuration (E2a, the model we use)
 
@@ -212,7 +217,7 @@ The sweep was run on v3 (10 val pucks, f5070 still in it).
 | f4590 | missed | puck touching the blade; the model has a box on it at conf 0.044 | same blade rule: the model learned "dark spot at a blade = usually not a puck" |
 | f4500 | missed | ~6 px puck, motion-blurred | round-1 proposals only found sharp, compact pucks, so blurred pucks are rare in train |
 | f4950 | missed | elongated object between two players | unclear (Zjef could not tell); crowded scene |
-| f5070 | "missed" | **a stick blade labelled as puck** (label error) | one reviewer, blade-vs-puck is hard for people too; removed in Roboflow v4: recall becomes 6/9 for E2a, nothing else changes (E3) |
+| f5070 | "missed" | **a stick blade labelled as puck** (label error) | only one reviewer, and blade vs puck is hard for people too; removed in Roboflow v4: recall becomes 6/9 for E2a, nothing else changes (E3) |
 
 **Conclusion:** none of the errors is a threshold problem. All of them come from the data: the blade
 rule, the bias of our proposal step, and one wrong label. This is why the blade rule was written down
@@ -315,7 +320,7 @@ distance and L had a 5× larger range than a/b. Standardising the features fixed
 
 | problem | what we saw | solution |
 |---|---|---|
-| foundation-model auto-labelling failed | Gemini boxed the wrong spot, SAM 3 gave 6 "pucks" in one frame | own proposal step (background subtraction, later our own model) + human review of every label |
+| foundation-model auto-labelling failed | Gemini boxed the wrong spot, SAM 3 gave 6 "pucks" in one frame | our own proposal step (background subtraction, later our own model) + human review of every label |
 | first clip unsuitable | handheld 4K, camera moved, only ~12 frames with a findable puck | switched to a static camera clip (`hockey_static_1080p.mp4`) |
 | puck too small for YOLO | 6–10 px becomes 2–3 px after resizing | training and inference on native-resolution 640 px tiles |
 | duplicate puck boxes | the same puck found by two overlapping tiles | a second (merge) NMS step; measured as essential in P1 |
@@ -330,7 +335,7 @@ distance and L had a 5× larger range than a/b. Standardising the features fixed
 
 ---
 
-## 9. What went well, what went badly
+## 9. Final remarks
 
 **Went well**
 
@@ -344,7 +349,7 @@ distance and L had a 5× larger range than a/b. Standardising the features fixed
 
 - The dataset is small (40 pucks) and biased towards easy pucks by our first proposal step.
 - No test set picked without a model; every val number is somewhat optimistic.
-- Agreement between labellers was low; the blade question took long to decide.
+- Agreement between labellers was low; the blade question took a long time to decide.
 - One training recipe: augmentations, model size and tile size were justified but never varied.
 - The far half of the rink is only mapped to several metres; player IDs break after occlusions.
 
@@ -354,6 +359,14 @@ distance and L had a 5× larger range than a/b. Standardising the features fixed
 2. A model-free test set (e.g. every 30th frame of an unseen part, labelled by hand).
 3. Small ablations of the recipe (e.g. scale augmentation, yolo26n vs s), each over 3 seeds.
 4. Second consistency round with a third labeller.
+
+**To conclude.** The pipeline works end to end: a clip goes in, and players, referees and the puck come
+out on a synchronized rink map, with tracking and team colours on top. The biggest gain did not come
+from the model architecture but from how we handled the data: native-resolution tiles and carefully
+reviewed labels.
+The biggest limits are also in the data (a small, partly biased dataset and a val set that is not fully
+independent) and in the camera position (the far half of the rink). Measuring honestly, with seeds, an
+audit and human checks of the AI's work, taught us at least as much as the model itself.
 
 ---
 
@@ -367,7 +380,8 @@ results on their own PC.
 Checking the AI paid off: only 65–74% of its "confident" puck proposals were real pucks, its first
 homography put the far goal ~70 m too far, its first Kalman test was too optimistic, and a val label
 (f5070) turned out to be a stick blade. Visual checks done only by the AI are marked as such in the log.
-Every team member is expected to explain the whole project on the oral exam. Details per part:
+The text of this report was proofread for language with Claude Code.
+Every team member is expected to explain the whole project at the oral exam. Details per part:
 [`genai.md`](genai.md).
 
 **Team contributions.** The main choices and agreements (sport and clip, labelling rules, which Extra
@@ -401,6 +415,7 @@ outputs and an example command, and writes its results to `outputs/<step>/<run-n
 | annotation | `scripts/label_agreement.py`, `scripts/label_blind.py` | consistency check between two labellers |
 | fine-tuning | `scripts/make_puck_dataset.py` | Roboflow export → 640 px tiles, split by time |
 | fine-tuning | `scripts/train_puck.py` | fine-tune YOLO26s on the tiles, log mAP@50 / mAP@50:95 |
+| fine-tuning | `notebooks/train_puck_detector.ipynb` | the training and evaluation step by step, with saved outputs |
 | evaluation | `scripts/eval_puck.py` | baseline vs fine-tuned on full frames (tiled inference, AP@50, confusion matrix) |
 | evaluation | `scripts/seed_summary.py`, `scripts/sweep_conf_nms.py` | seed study; confidence and NMS sweep with every error as a crop |
 | homography | `scripts/rink.py`, `scripts/homography.py`, `scripts/calibrate_lens.py` | rink template, lens correction + homography, choosing k1 |

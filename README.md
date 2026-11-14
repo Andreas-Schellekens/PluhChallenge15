@@ -54,6 +54,8 @@ scripts/
 configs/
   keypoints_hockey_static_1080p.json   rink keypoints + lens model for the main clip
   keypoints_hockey_clip_4k.json   same for the first clip
+notebooks/
+  train_puck_detector.ipynb  how the puck detector was trained and evaluated, step by step (with saved outputs)
 docs/
   final_report.md            final report (overview + documentation), figures in report_img/
   experiments.md             experiment log: one entry per run (config, results, conclusions)
@@ -96,6 +98,8 @@ python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_
 ```
 
 No NVIDIA GPU? Install torch without `--index-url`. Everything still works, just slower.
+
+To open the training notebook (`notebooks/train_puck_detector.ipynb`) in Jupyter, also install `pip install notebook` and pick the `.venv` kernel; VS Code opens it directly. The outputs are saved in the notebook, so you can read it without running it.
 
 Then put the clips in `Video/` (from the team drive): `hockey_static_1080p.mp4` (main) and `hockey_clip_4k_noaudio.mp4`.
 
