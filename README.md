@@ -24,13 +24,11 @@ Main clip: `Video/hockey_static_1080p.mp4` (static camera behind the goal, 1080p
 | Extra Mile: tracking (T1, T2) | Done: ByteTrack player IDs + Kalman filter for the puck (puck on the minimap in 18% → 42% of frames). `scripts/track.py`, app tab Tracking |
 | Extra Mile: team colours (TM1) | Done: K-means on jersey colours splits white / blue / bystanders (92% on a 115-crop sample labelled by a team member, TM2), plus occupancy heatmaps. `scripts/teams.py`, app tab Teams |
 | Review (A1) | code and log audited; the errors found are listed in the log with what was done about each |
-| Error analysis + conf/NMS sweep | confidence and both NMS steps measured for E2a (merge NMS essential: AP@50 0.65 → 0.40 without it; no threshold recovers the missed pucks, so conf 0.25 / NMS 0.7 / 0.3 stay). Errors sorted by the course's slide-38 categories and linked to annotation choices. See [`docs/error_analysis.md`](docs/error_analysis.md). Error types checked by Zjef: the val "puck" at f5070 is a stick blade (label error, to fix in v4) |
+| Error analysis + conf/NMS sweep | confidence and both NMS steps measured for E2a (merge NMS essential: AP@50 0.65 → 0.40 without it; no threshold recovers the missed pucks, so conf 0.25 / NMS 0.7 / 0.3 stay). Errors sorted by the course's slide-38 categories and linked to annotation choices. See [`docs/error_analysis.md`](docs/error_analysis.md). Error types checked by Zjef: the val "puck" at f5070 is a stick blade (label error, removed in v4, E3) |
 
 ## Repository layout
 
 ```
-CV_Challenge_2026_2027.pdf   assignment brief
-CLAUDE.md                    guidance for Claude Code (AI assistant) in this repo
 requirements.txt             Python dependencies (install PyTorch first, see below)
 app.py                       Streamlit dashboard: video + minimap, all parameters in the sidebar
 scripts/
