@@ -56,3 +56,7 @@ mlruns/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Local hand-in files and archive (not in git)
+inlevering/
+_archief/

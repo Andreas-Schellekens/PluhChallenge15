@@ -1,4 +1,4 @@
-"""Compare the pretrained baseline with the fine-tuned puck model on full 4K frames.
+"""Compare the pretrained baseline with the fine-tuned puck model on full frames.
 
 Goal: show whether fine-tuning closed the data gap, measured the way the
 pipeline will really be used: on whole frames, not on training-sized tiles.
@@ -6,7 +6,7 @@ pipeline will really be used: on whole frames, not on training-sized tiles.
 The two models:
   baseline    COCO YOLO26 on the whole frame (imgsz 1280, as in E0); its
               "sports ball" class is counted as a puck prediction.
-  finetuned   our puck model with TILED inference: the 4K frame is cut into
+  finetuned   our puck model with TILED inference: the full frame is cut into
               overlapping 640x640 tiles (the same grid as the val tiles), each
               tile is predicted at native resolution, boxes are shifted back to
               frame coordinates, and duplicates from overlapping tiles are
@@ -31,8 +31,8 @@ Outputs (in outputs/eval_puck/<name>/, ignored by git):
   timeline.png, clip_detections.csv   (only with --video)
 
 Usage:
-  python scripts/eval_puck.py --finetuned outputs/train/yolo26s_puck_640/weights/best.pt \\
-      --frames data/puck_tiles/tiles640_v1/frames.csv --video Video/hockey_clip_4k_noaudio.mp4
+  python scripts/eval_puck.py --finetuned outputs/train/v4_E2a_s0/weights/best.pt \\
+      --frames data/puck_tiles/fillempje_v4_tiles640/frames.csv --video Video/hockey_static_1080p.mp4 --name v4_E2a_s0
 """
 
 import argparse

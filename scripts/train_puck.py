@@ -3,25 +3,26 @@
 Goal: teach the model a new `puck` class. We start from COCO-pretrained weights
 (transfer learning): the backbone already knows edges, blobs and textures, so
 only a little data is needed to learn a new small object. All weights are
-trained (no frozen layers): with ~200 crops one run takes minutes.
+trained (no frozen layers): with ~870 train tiles one run takes about 25 min on an RTX 4060 Laptop.
 
-Augmentations, chosen for a 15 px object filmed from a fixed side of the rink:
-  scale=0.2     default 0.5 can shrink the crop by 2x -> puck ~7 px, smaller than it
-                ever is in our footage. 0.2 keeps it between ~12 and ~18 px.
+Augmentations, chosen for a 6-10 px object filmed by a fixed camera:
+  scale=0.2     the default 0.5 can shrink a crop by 2x -> a 6 px puck becomes 3 px,
+                below what the model can see (less than one stride-8 cell). 0.2 keeps
+                it within 0.8-1.2x of its real size. (Not ablated: see the report.)
   fliplr=0.5    a mirrored rink still looks like a rink: a free 2x on the data.
   flipud=0.0    upside-down ice with the crowd below never happens.
   degrees=0     the camera is not rolled; rotating would also bend the box.
   mosaic=1.0    4 crops in one image: more context variety and more puck-free
                 ice per batch (default), switched off for the last 10 epochs.
   hsv_*         default colour jitter: the arena light is constant, but it helps
-                against overfitting on 9 frames.
+                against overfitting on 31 training pucks.
 
 Outputs (in outputs/train/<name>/, ignored by git): the Ultralytics run folder
 (weights/best.pt, results.csv, confusion_matrix.png, PR curves, val batches)
 plus metrics.json with the final validation mAP of best.pt.
 
 Usage:
-  python scripts/train_puck.py --data data/puck_tiles/tiles640_v1/data.yaml
+  python scripts/train_puck.py --data data/puck_tiles/fillempje_v4_tiles640/data.yaml --seed 0 --name v4_E2a_s0
 """
 
 import argparse
