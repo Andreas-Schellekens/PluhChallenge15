@@ -46,7 +46,8 @@ what) were made together in team meetings with everyone present. Besides that:
   together the documentation (annotation rules, this GenAI file, the final report), with Claude Code drafting.
 - **Finn** asked for the audit (A1) and decided the 2 px margin and the ±10 frames check.
 - **Mihai** ran the original baselines (E0) on his PC and asked for the lens calibration (H4).
-- **Zjef** labelled the blind consistency round and checked the five E2a errors (f5070 is a stick blade).
+- **Zjef** ran the conf/NMS sweep and error analysis (P1) on his PC, checked the five E2a errors (f5070 is
+  a stick blade) and labelled the blind consistency round.
 
 ## How AI output was verified
 
