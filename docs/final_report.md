@@ -4,7 +4,7 @@ Team Challenge15 (Andreas, Finn, Mihai, Zjef) · Thomas More, Deep Learning – 
 
 *Written with the help of Claude Code from our experiment log and saved run outputs; completed by the
 team. Every number links back to an entry in [`experiments.md`](experiments.md) (E = puck detector, H = homography, T = tracking,
-TM = teams, S = seed study, A = audit, P = post-processing). Figures are in `docs/report_img/`.*
+TM = teams, S = seed study, A = audit, P = post-processing).*
 
 ---
 
@@ -29,7 +29,7 @@ because the camera moved and the puck was rarely findable.)
 
 | part of the brief | status | where |
 |---|---|---|
-| 1. targeted annotation (40–80 frames) | 64 human-reviewed frames (41 with a puck, 23 verified empty), 2 assisted rounds, written rules, consistency check between two labellers | §2, `annotation.md` |
+| 1. targeted annotation (40–80 frames) | 63 human-reviewed frames in the final dataset (40 with a puck, 23 verified empty), 2 assisted rounds, written rules, consistency check between two labellers | §2, `annotation.md` |
 | 2. fine-tuning + mAP | YOLO26s fine-tuned on 640 px tiles; final dataset v4: our model mAP@50 0.680 / mAP@50:95 0.410, over 3 seeds 0.59 ± 0.10 / 0.36 ± 0.06 | §3 |
 | 2. error analysis | conf/NMS sweep, every error typed (course slide 38) and traced to an annotation choice | §4, `error_analysis.md` |
 | 3. homography + minimap | lens correction + 6 keypoints, IIHF template; decimetres near the camera, metres at the far end | §5 |
@@ -96,7 +96,7 @@ on new frames.
 ### 2.6 What we would do differently
 - Our proposal filters only found compact, sharp pucks on open ice, so the dataset under-represents
   pucks at the skates, at the boards, blurred, and far away. Exactly those are missed later (§4).
-- 15 of the 25 val frames were chosen *because the E1 model found nothing there*, and 5 of the 6 val
+- 15 of the 25 val frames (v3) were chosen *because the E1 model found nothing there*, and 5 of the 6 val
   pucks added in round 2 were E1 proposals. The val set therefore flatters E1 (A1). A test set chosen
   without any model is the fair fix.
 
@@ -116,7 +116,7 @@ are merged with a second NMS step.
 |---|---|---|
 | start weights | `yolo26s.pt` (COCO) | transfer learning: the backbone already knows edges and blobs; same model as the baseline, so the gain is the fine-tuning |
 | train data | 248 tiles with a puck (8 random crops per labelled frame) + 624 without | there is one puck per frame, so the rest of a labelled frame is a guaranteed negative: skates, tape, ads |
-| val data | full tile grid of the 25 val frames: 200 tiles, 30 puck boxes | measures the real inference situation |
+| val data | the full tile grid of every val frame (8 tiles per frame) | measures the real inference situation |
 | augmentation | mosaic 1.0, scale ±0.2, horizontal flip 0.5, no vertical flip, no rotation | the camera is fixed and upright; a mirrored rink is still a rink; a large scale change would push a 6 px puck below what the model can see |
 | training | 100 epochs, batch 16, imgsz 640, seed 0, RTX 4060 Laptop (~25 min) | `best.pt` = the epoch with the best val fitness |
 
@@ -124,11 +124,9 @@ are merged with a second NMS step.
 
 ![Training console](report_img/console_train_v4_s0.png)
 
-*The console output of a training run with the E2a recipe (here the v4 rerun with seed 0, RTX 4060
-Laptop, 25 min). Rendered from the saved log `outputs/train_v4_s0.log`: progress-bar redraws are
-removed and the middle epochs and the full argument list are left out ("..."); every number shown is
-from the log. Note how noisy the val metrics are from epoch to epoch (epoch 19: mAP@50 0.68, epoch 20:
-0.61) and how `best.pt` (epoch 19) is validated again at the end: 0.68 / 0.41.*
+*Console output of the E2a recipe on v4 with seed 0 (RTX 4060 Laptop, 25 min), from the saved log; the
+middle epochs are left out ("..."). The val metrics are noisy from epoch to epoch (epoch 19: mAP@50
+0.68, epoch 20: 0.61); `best.pt` (epoch 19) is validated again at the end: 0.68 / 0.41.*
 
 ### 3.4 Training curves
 
@@ -153,31 +151,22 @@ starts to memorise them. `best.pt` is from epoch 19.*
 
 ### 3.5 The experiments
 
+All models scored on the final dataset v4 (9 val pucks; E3). The original scores on v3 are in the log
+(E1, E2).
+
 | run | change | tile mAP@50 | tile mAP@50:95 | full frames TP / FP / FN | AP@50 full frame |
 |---|---|---|---|---|---|
-| baseline | COCO "sports ball", whole frame | – | – | 0 / 0 / 10 | 0.01 |
-| E1 | 20 labelled frames (round 1) | 0.789* | 0.506* | 5 / 2 / 5 | 0.58 |
-| **E2a** | 41 labelled frames (round 2) | **0.634** | **0.382** | **6 / 1 / 4** | **0.65** |
-| E2b | E2a + hard negatives (skate crops, logo spot) | 0.460 | 0.269 | 7 / 11 / 3 | 0.55 |
+| baseline | COCO "sports ball", whole frame | – | – | 0 / 0 / 9 | 0.02 |
+| E1 | 20 labelled frames (round 1) | 0.522 | 0.346 | 5 / 2 / 4 | 0.64 |
+| **E2a** | 41 labelled frames (round 2) | **0.680** | **0.410** | **6 / 1 / 3** | **0.72** |
+| E2b | E2a + hard negatives (skate crops, logo spot) | 0.497 | 0.290 | 7 / 11 / 2 | 0.61 |
+| E2a recipe, 3 seeds | same as E2a | 0.586 ± 0.104 | 0.362 ± 0.057 | 6 / 1–2 / 3 | 0.665 ± 0.050 |
 
-\* on the old 4-frame val set, not comparable. All rows above are scored on v3 (10 val pucks).
+Retraining with seed 0 gave **exactly** the same model as the original E2a (best epoch 19, identical
+metrics and clip detections), so the run is reproducible.
 
-**Re-scored on the final dataset v4** (f5070 removed, 9 val pucks; E3):
-
-| model | tile mAP@50 | tile mAP@50:95 | full frames TP / FP / FN | AP@50 full frame |
-|---|---|---|---|---|
-| baseline | – | – | 0 / 0 / 9 | 0.02 |
-| E1 | 0.522 | 0.346 | 5 / 2 / 4 | 0.64 |
-| **E2a** | **0.680** | **0.410** | **6 / 1 / 3** | **0.72** |
-| E2b | 0.497 | 0.290 | 7 / 11 / 2 | 0.61 |
-| E2a recipe retrained on v4, 3 seeds | 0.586 ± 0.104 | 0.362 ± 0.057 | 6 / 1–2 / 3 | 0.665 ± 0.050 |
-
-Retraining with seed 0 on the same GPU gave **exactly** the same model as the original E2a (best
-epoch 19, identical metrics and clip detections): training is deterministic, so the run is fully
-reproducible.
-
-**Seed study (S1).** One run per variant on 10 val pucks proves little, so we trained the E2a recipe and
-a clean hard-negative variant (E2c) with seeds 0, 1, 2:
+**Seed study (S1, on v3).** To test the hard negatives fairly, we trained the E2a recipe and a clean
+hard-negative variant (E2c) with seeds 0, 1, 2:
 
 | variant | tile mAP@50 | tile mAP@50:95 | recall (full frames) | AP@50 full frame |
 |---|---|---|---|---|
@@ -186,13 +175,14 @@ a clean hard-negative variant (E2c) with seeds 0, 1, 2:
 
 **What we learned**
 
-1. **More labelled data helped most** (E1 → E2a): more precise, AP@50 0.58 → 0.65, and visibly fewer
-   false alarms on the clip.
-2. **The seed alone moves mAP@50 by ±0.05.** A difference under ~0.1 between two single runs means
-   nothing here. Our logged 0.634 is the best of four draws; the honest figure is 0.56 ± 0.06.
+1. **More labelled data helped most** (E1 → E2a): AP@50 0.64 → 0.72, and visibly fewer false alarms
+   on the clip.
+2. **The seed alone moves tile mAP@50 by ±0.10.** A difference under ~0.1 between two single runs means
+   nothing here. The model we use (seed 0, 0.680) is the best of three seeds; the honest figure is
+   0.59 ± 0.10.
 3. **Hard negatives did not help**, even with the comparison made clean (S1). The main false positive is
    a stick blade next to a puck, which is a labelling question, not something extra background crops fix.
-4. Recall on full frames is stable (6/10 in every E2a seed); what varies is the number of false alarms.
+4. Recall on full frames is stable (6/9 in every seed); what varies is the number of false alarms.
 
 ---
 
@@ -200,6 +190,7 @@ a clean hard-negative variant (E2c) with seeds 0, 1, 2:
 
 ### 4.1 Threshold and NMS (P1)
 Our pipeline has two NMS steps: inside each tile (Ultralytics) and between overlapping tiles (our merge).
+The sweep was run on v3 (10 val pucks, f5070 still in it).
 
 ![Precision, recall and F1 against the confidence threshold](report_img/sweep_pr_vs_conf.png)
 
@@ -228,8 +219,8 @@ rule, the bias of our proposal step, and one wrong label. This is why the blade 
 and the consistency check was done (§2).
 
 ### 4.3 Hypotheses for the next step
-1. Apply the written blade rule (v4) and retrain over 3 seeds → fewer blade false positives, f4590-like
-   pucks found.
+1. Re-check all existing labels with the written blade rule and retrain over 3 seeds → fewer blade
+   false positives, f4590-like pucks found. (So far only the wrong label f5070 was removed, v4/E3.)
 2. Label blurred/airborne pucks on purpose, or add blur augmentation → higher recall on fast pucks.
 3. More labels in the far half of the rink; a finer detection head (P2, stride 4) as the architectural
    option.
@@ -265,8 +256,9 @@ repair that; only a higher or second camera could.
 
 ## 6. Pipeline and app
 
-`streamlit run app.py`. All heavy work lives in `scripts/` (`pipeline.py` per frame: detect → map →
-draw), so the app runs the same code the experiments were logged with.
+Start it with `.venv\Scripts\streamlit run app.py` (the Streamlit of the project's own environment).
+All heavy work lives in `scripts/` (`pipeline.py` per frame: detect → map → draw), so the app runs the
+same code the experiments were logged with.
 
 | tab | what it shows |
 |---|---|
@@ -288,25 +280,6 @@ player on the ice.*
 *Clip tab after processing 20–25 s with tracking on: ByteTrack IDs on the boxes and the same IDs on
 the minimap below the video.*
 
-![App: Puck model tab](report_img/app_puck_model.jpg)
-
-*Puck model tab: baseline vs fine-tuned on the val frames, with the confusion matrices.*
-
-![App: Homography tab](report_img/app_homography.jpg)
-
-*Homography tab: the 6 keypoints with their reprojection error in metres and pixels.*
-
-![App: Tracking tab](report_img/app_tracking.jpg)
-
-*Tracking tab: the whole-clip tracking run and the gap test. (On this PC the run gives 232 player IDs;
-the log's 198 came from another GPU, see R1.)*
-
-![App: Teams tab](report_img/app_teams.jpg)
-
-*Teams tab: the colour groups and the K-means selection.*
-
-The app screenshots were taken by Claude Code with headless Chrome on the running app.
-
 ---
 
 ## 7. Extra Mile
@@ -323,7 +296,7 @@ The app screenshots were taken by Claude Code with headless Chrome on the runnin
 | gap test (hide detections, compare) | 2.7× closer than "hold last position" for 0.1 s gaps; only 1.2× at 0.5 s |
 | player IDs | ~200 IDs for ~14 people: tracks break after long occlusions, and kits look alike |
 
-### 7.2 Team colours and heatmaps (TM1)
+### 7.2 Team colours and heatmaps (TM1, TM2)
 K-means (k = 3) on jersey colour in CIELAB (75th percentile of L, mean a and b, standardised), with a
 vote over the last 30 detections of each track. It separates white team / blue team / bystanders at the
 boards with **92%** per detection on a 115-crop sample labelled blind by Andreas (TM2). The vote over
@@ -361,7 +334,7 @@ distance and L had a 5× larger range than a/b. Standardising the features fixed
 
 **Went well**
 
-- The tiling design turned the puck from almost never found (0/10) into found in 6/9 val frames with
+- The tiling design turned the puck from almost never found (0/9) into found in 6/9 val frames with
   AP@50 0.72 (v4).
 - Model-in-the-loop labelling sped up round 2, and human review kept wrong proposals out.
 - Honest measurement: seeds, an audit, a fair gap test, and errors traced to the data.
@@ -369,7 +342,7 @@ distance and L had a 5× larger range than a/b. Standardising the features fixed
 
 **Went badly / limitations**
 
-- The dataset is small (41 pucks) and biased towards easy pucks by our first proposal step.
+- The dataset is small (40 pucks) and biased towards easy pucks by our first proposal step.
 - No test set picked without a model; every val number is somewhat optimistic.
 - Agreement between labellers was low; the blade question took long to decide.
 - One training recipe: augmentations, model size and tile size were justified but never varied.
@@ -377,7 +350,7 @@ distance and L had a 5× larger range than a/b. Standardising the features fixed
 
 **Next steps**
 
-1. Roboflow v4, retrain over 3 seeds, re-evaluate: **done** (E3).
+1. Re-check the old labels with the blade rule and retrain over 3 seeds (only f5070 is fixed so far, E3).
 2. A model-free test set (e.g. every 30th frame of an unseen part, labelled by hand).
 3. Small ablations of the recipe (e.g. scale augmentation, yolo26n vs s), each over 3 seeds.
 4. Second consistency round with a third labeller.
@@ -388,8 +361,8 @@ distance and L had a 5× larger range than a/b. Standardising the features fixed
 
 We used GenAI (Claude Code) to help write the code, to understand the assignment better, and to give
 us ideas and options; the decisions were ours (sport and clip, which labels to keep, the labelling rules,
-the Extra Mile tracks, the model we use). Big choices were made in team meetings with everyone present,
-and the team members with a GPU ran and checked the code and results on their own PC.
+the Extra Mile tracks, the model we use). The team members with a GPU ran and checked the code and
+results on their own PC.
 
 Checking the AI paid off: only 65–74% of its "confident" puck proposals were real pucks, its first
 homography put the far goal ~70 m too far, its first Kalman test was too optimistic, and a val label
@@ -405,7 +378,7 @@ Mile tracks, who does what) were made together in team meetings with everyone pr
 | **Andreas** | all labelling in Roboflow: reviewed every AI proposal and drew, moved or rejected the boxes for both rounds, removed f5070 and generated v4; the blind check of the team-colour sample (115 players, TM2); the blade rule; the documentation (annotation rules, GenAI statement, this report), with Claude Code drafting |
 | Finn | asked for the full audit (A1); decided the 2 px margin and the ±10 frames check after the consistency round |
 | Mihai | the original baseline runs on his PC (E0); asked for the lens calibration (H4) |
-| Zjef | the blind labelling round (consistency check); checked the five E2a errors and found that f5070 was a stick blade |
+| Zjef | ran the conf/NMS sweep and error analysis (P1) on his PC; checked the five E2a errors and found that f5070 was a stick blade; labelled the blind consistency round |
 
 **Reproduce.** Every entry in `experiments.md` lists its exact command; setup is in the README.
 Videos, datasets, weights and run outputs are not in git. Run folders and datasets still carry the clip's
@@ -437,4 +410,4 @@ outputs and an example command, and writes its results to `outputs/<step>/<run-n
 | documentation | `docs/` | experiment log, annotation rules, error analysis, GenAI use, this report |
 
 **Run it.** Install as in the README (PyTorch with CUDA first, then `requirements.txt`), put the clip in
-`Video/` and start the app with `streamlit run app.py`.
+`Video/` and start the app with `.venv\Scripts\streamlit run app.py`.
