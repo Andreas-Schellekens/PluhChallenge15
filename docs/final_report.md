@@ -375,7 +375,7 @@ Mile tracks, who does what) were made together in team meetings with everyone pr
 
 | member | main contributions |
 |---|---|
-| **Andreas** | all labelling in Roboflow: reviewed every AI proposal and drew, moved or rejected the boxes for both rounds, removed f5070 and generated v4; the blind check of the team-colour sample (115 players, TM2); the blade rule; the documentation (annotation rules, GenAI statement, this report), with Claude Code drafting |
+| Andreas | all labelling in Roboflow: reviewed every AI proposal and drew, moved or rejected the boxes for both rounds, removed f5070 and generated v4; the blind check of the team-colour sample (115 players, TM2); the blade rule; the documentation (annotation rules, GenAI statement, this report), with Claude Code drafting |
 | Finn | asked for the full audit (A1); decided the 2 px margin and the ±10 frames check after the consistency round |
 | Mihai | the original baseline runs on his PC (E0); asked for the lens calibration (H4) |
 | Zjef | ran the conf/NMS sweep and error analysis (P1) on his PC; checked the five E2a errors and found that f5070 was a stick blade; labelled the blind consistency round |
