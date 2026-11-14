@@ -8,8 +8,7 @@ One entry per run: config, what we measured, what we concluded. Raw outputs live
 `Video/hockey_clip_4k_noaudio.mp4`: 3840×2160, 30 fps, 31 s (930 frames). NHL, Wild (green)
 vs Blues (white), filmed handheld from the stands, so the framing drifts slightly over time.
 
-## E0 – Pretrained baseline (no fine-tuning), 2026-10-16
-
+## E0 – Pretrained baseline (no fine-tuning)
 **Goal:** measure what off-the-shelf COCO YOLO already does, and confirm the data gap.
 
 Command: `python scripts/baseline.py --video Video/hockey_clip_4k_noaudio.mp4 --imgsz {640,1280} --stride 2`
@@ -44,8 +43,7 @@ Inference fps is dominated by decoding 4K video, not by the model, so both sizes
 - Players can stay on pretrained weights. Use imgsz 1280 for them.
 - To check: are the 103 person boxes under 100 px tall at 1280 spectators or real players?
 
-## H1 – Homography and rink minimap, 2026-10-30
-
+## H1 – Homography and rink minimap
 **Goal:** map every player's position from the video onto a top-down rink (MVP part 3), and
 handle the handheld camera drift.
 
@@ -121,9 +119,9 @@ vertically than horizontally, and more far from the camera. 10 px of foot error:
 
 ---
 
-# Clip 2: `fillempje.mp4` (main clip from 2026-10-30)
+# Clip 2: `fillempje.mp4` (main clip)
 
-*Renamed 2026-11-13:* this clip was called `fillempje.mp4` (and its config `keypoints_fillempje.json`); it is now `Video/hockey_static_1080p.mp4` with `configs/keypoints_hockey_static_1080p.json`. Commands and folder names in the entries below are kept as they were run (`outputs/*/fillempje_*`, `data/frames/fillempje`, the Roboflow tag `fillempje`); only the video and config path changed.
+*Renamed:* this clip was called `fillempje.mp4` (and its config `keypoints_fillempje.json`); it is now `Video/hockey_static_1080p.mp4` with `configs/keypoints_hockey_static_1080p.json`. Commands and folder names in the entries below are kept as they were run (`outputs/*/fillempje_*`, `data/frames/fillempje`, the Roboflow tag `fillempje`); only the video and config path changed.
 
 **Why we switched.** The 4K clip was handheld, so the camera moved, and it showed only 12
 frames with a findable puck. The new clip matches the assignment's "single static camera"
@@ -135,8 +133,7 @@ lens) mounted **behind the near goal**, looking down the rink. The camera is sta
 for a bump in the first second. The puck is about 6–10 px near the camera and only a few
 pixels far away.
 
-## E0-B – Pretrained baseline on clip 2, 2026-10-30
-
+## E0-B – Pretrained baseline on clip 2
 Command: `python scripts/baseline.py --video Video/fillempje.mp4 --imgsz 1280 --stride 2 --name fillempje_yolo26s_1280`
 (yolo26s, conf 0.25, RTX 4060 Laptop, 2548 frames, 16.4 fps).
 
@@ -155,9 +152,8 @@ Command: `python scripts/baseline.py --video Video/fillempje.mp4 --imgsz 1280 --
 **Conclusion:** the data gap is the same as on clip 1: recall on the puck. That is what the
 fine-tuned model (E1) has to show.
 
-## H2 – Homography with lens correction on clip 2, 2026-10-30
-
-> **Superseded by H3 (2026-11-11):** the 4 keypoints of this entry are all next to the camera,
+## H2 – Homography with lens correction on clip 2
+> **Superseded by H3:** the 4 keypoints of this entry are all next to the camera,
 > and the mapping they give is wrong in the far half of the rink.
 
 Command: `python scripts/homography.py --video Video/fillempje.mp4 --keypoints configs/keypoints_fillempje.json --detections outputs/baseline/fillempje_yolo26s_1280/detections.csv --drift none`
@@ -175,7 +171,7 @@ background. The score is the mean distance of the yellow pixels to their best-fi
 |---|---|---|---|---|---|
 | deviation from a straight line (px) | 1.18 | 0.97 | 0.54 | **0.34** | 0.87 |
 
-*Added 2026-11-13:* no script produced this table (A1). `scripts/calibrate_lens.py` now does;
+*Added:* no script produced this table (A1). `scripts/calibrate_lens.py` now does;
 it finds the same best k1, with slightly different scores. See H4.
 
 The ice region is only mildly distorted; the strong fisheye is mostly in the roof, which we
@@ -217,8 +213,7 @@ sign happened to come out positive.)
 size and confidence, puck detector (fine-tuned / baseline / off) with confidence, tile size
 and overlap, lens k1, camera motion (static / SIFT) and the template overlay.
 
-## E1 – Fine-tuned puck detector on clip 2, 2026-10-30
-
+## E1 – Fine-tuned puck detector on clip 2
 **Data:** Roboflow version 2, 20 human-reviewed frames with 1 puck each (see
 `docs/annotation.md`). Split by time: train = 16 frames (f330–f4080), val = 4 frames
 (f4200, f4560, f4950, f5070).
@@ -317,8 +312,7 @@ clip, with no false positive on val and roughly 1 in 4 false positives on the cl
 failure modes point directly at the next labelling round: pucks at skates, at the boards and
 far away, plus rejected look-alikes as negatives, to reach 40–80 frames.
 
-## E2 – More data (round 2) and hard negatives, 2026-10-31
-
+## E2 – More data (round 2) and hard negatives
 **Data:** Roboflow version 3 (tag `fillempje`, no preprocessing or augmentation): 64 images,
 of which 41 have a puck and 23 are verified null. See `docs/annotation.md`, round 2.
 - Split by time, as before (≥ f4200 = val):
@@ -368,7 +362,7 @@ E1 was scored again on the new val set, so all models are compared on the same 2
 2. **The hard negatives did not help (E2a → E2b).** E2b finds 1 more puck, but it gives
    11 false alarms on val instead of 1. `val_false_positives.jpg` shows that they are
    almost all **stick blades** (and a glove). In 6 of the 11 cases the frame was marked null,
-   so the reviewer saw no puck there. *(Corrected 2026-11-11: this said 7; `eval_E2b.log`
+   so the reviewer saw no puck there. *(Corrected: this said 7; `eval_E2b.log`
    shows 6 on null frames and 5 on frames with a puck.)*
    - The clip says the same: more detections, lower precision. The far-end spot from round 1 is
      back too (f86–f152).
@@ -390,7 +384,7 @@ E1 was scored again on the new val set, so all models are compared on the same 2
 4. **Overfitting again.** Both runs reach their best val score before epoch 40, while the
    train loss keeps falling (E2a box loss: 1.65 at epoch 20 → 0.52 at epoch 100).
 
-> **Read this entry together with A1 and S1 (2026-11-11).** The audit found that E2a and E2b
+> **Read this entry together with A1 and S1.** The audit found that E2a and E2b
 > differ in more than the hard negatives (almost all random crops were different too), and
 > that the val set favours E1. S1 repeats the comparison cleanly with three seeds.
 > The tile val numbers in the table are from the re-validation of `best.pt` (`metrics.json`);
@@ -403,9 +397,8 @@ help: it gave more false positives, mainly on stick blades. The next steps for d
 team-wide labelling rule for pucks at the blade, and blades as explicit hard negatives. A
 repeat with 2–3 seeds would tell whether E2a vs E2b is a real difference.
 
-## T1 – Tracking (Extra Mile): ByteTrack for players, Kalman filter for the puck, 2026-11-05
-
-> **The numbers in this entry are superseded by T2 (2026-11-11).** They were measured with the
+## T1 – Tracking (Extra Mile): ByteTrack for players, Kalman filter for the puck
+> **The numbers in this entry are superseded by T2.** They were measured with the
 > 4-point homography, which was wrong in the far half of the rink (H3), and the gap test
 > flattered the filter (A1). The method described here is still what the code does.
 
@@ -490,14 +483,12 @@ minimap video.
 
 ---
 
-# Review round, 2026-11-11
-
+# Review round
 Everything from here on was run on an RTX 2080 Ti (11 GB), from a fresh clone with the team's
 `data/` and `outputs/`. First check: `best.pt` of E2a validated on this machine gives
 mAP@50 0.635 / mAP@50:95 0.382, the same as logged (0.634 / 0.382).
 
-## A1 – Audit of the code and the log, 2026-11-11
-
+## A1 – Audit of the code and the log
 **Goal:** before adding anything, check that what we already claim is right. A second Claude
 Code agent read every script and compared every number in the docs with the saved outputs
 (read-only; the main session verified the findings it acted on).
@@ -525,11 +516,10 @@ the `yolo26s_640` row and the Quadro fps in E0, "3.6 frames/s" in H1, the k1 plu
 H2 (no calibration script in the repo), and the clip samples of E1/E2 (23/30, 28/30, 19/30), which
 are visual checks by Claude Code that no team member has confirmed.
 
-*Added 2026-11-13 (Mihai):* the E0 outputs from the original runs of 2026-10-16 are still on Mihai's PC
+*Added (Mihai):* the E0 outputs from the original runs are still on Mihai's PC
 (`outputs/baseline/yolo26s_{640,1280}/summary.json`); they confirm the `yolo26s_640` row and the Quadro fps (6.27 / 6.62).
 
-## H3 – Homography with 6 keypoints, fitted in pixels, 2026-11-11
-
+## H3 – Homography with 6 keypoints, fitted in pixels
 **Why.** H2 had exactly 4 points, so its reprojection error was 0 by construction and said
 nothing. The independent check we had not done: where does the **far goal** land? Its posts
 stand on the ice at (26, ±0.915) m. With the H2 mapping their measured pixels, (919, 400.5) and
@@ -583,8 +573,7 @@ same exact solution, which is why this never showed before.
 zone only. Positions next to the camera are good to a few decimetres; beyond the centre line
 they are an indication (several metres), and the log says so wherever they are used.
 
-## T2 – Tracking re-measured: fair gap test, new homography, rink limit, 2026-11-11
-
+## T2 – Tracking re-measured: fair gap test, new homography, rink limit
 Commands:
 ```
 python scripts/track.py --video Video/fillempje.mp4 --keypoints configs/keypoints_fillempje.json --puck-weights outputs/train/fillempje_v3_yolo26s_puck_640/weights/best.pt --tracker configs/bytetrack_hockey.yaml --name fillempje_teams --redo
@@ -658,8 +647,7 @@ act on. The option stays in `track.py` (`--puck-px-std`, default 0 = off).
 (17.9% → 41.6%) and is 2.7× closer than a frozen puck during very short gaps. Its advantage
 over half a second is small, and it does not reduce impossible jumps by half as T1 claimed.
 
-## TM1 – Team colours (second Extra Mile): K-means on jerseys, occupancy heatmaps, 2026-11-11
-
+## TM1 – Team colours (second Extra Mile): K-means on jerseys, occupancy heatmaps
 **Why.** Every person on the ice was the same orange dot; the log listed "referees are drawn as
 players" as open since H1. The brief names this as an extension: team colour clustering and
 occupancy heatmaps (KDE).
@@ -715,6 +703,10 @@ python scripts/teams.py --video Video/fillempje.mp4 --players outputs/track/fill
 labelled from the crops **by Claude Code, not yet confirmed by a team member**; 10 were
 unclear (blurred, two people in one box) and left out.
 
+> **Corrected in TM2:** a team member (Andreas) labelled the same sample blind. With his labels the
+> window vote scores 90.4% (not 95.5%) and per detection 92.2%. The numbers below are kept as they were
+> measured on Claude's labels.
+
 | | correct of 110 | accuracy | colour flips per 100 detections |
 |---|---|---|---|
 | per detection | 101 | 91.8% | 2.78 |
@@ -753,8 +745,7 @@ about 95% accuracy on a small sample, after one failed iteration that taught us 
 features. The remaining errors come from overlapping players and from ID switches in the
 tracker, not from the clustering itself.
 
-## S1 – Seed study: is E2a really better, and do hard negatives help?, 2026-11-11
-
+## S1 – Seed study: is E2a really better, and do hard negatives help?
 **Goal:** E2 compared one training run per variant on 10 val pucks. Two questions were left
 open. (1) How much does a result move when only the random seed changes? (2) Do hard negatives
 help, now that the comparison is clean (A1, finding 3)?
@@ -836,8 +827,7 @@ fewest false positives. When we quote its quality we give the seed mean (mAP@50 
 mAP@50:95 0.31) next to the single best run (0.634 / 0.382). The next gain has to come from
 labels (the blade rule, more val pucks), not from more hard negatives or more training runs.
 
-## R1 – Review of the 2026-11-11 round on a second machine, 2026-11-12
-
+## R1 – Review of the review round on a second machine
 **Goal:** before merging the review round, check its code and re-measure what can be re-measured
 on another machine (RTX 4060 Laptop, Ultralytics 8.4.178). Review by Claude Code, asked for by
 Andreas; the numbers below are from re-runs, not from reading the log.
@@ -866,7 +856,7 @@ people), the exact count does not.
 - `app.py`: the Clip tab now gives the Kalman filter the rink limit from T2 (`inside`); it was
   only used in `track.py`.
 
-**App changes after testing the Clip tab (2026-11-12, same machine).** Processing 10 s of the
+**App changes after testing the Clip tab (same machine).** Processing 10 s of the
 clip (300 frames, tracking and team colours on) worked without errors: 10.9 people on the ice per
 frame, puck shown in 95 of 300 frames (58 of them predicted).
 - **Drawing the rink template took as long as both detectors.** Timed per frame: detection +
@@ -882,8 +872,7 @@ frame, puck shown in 95 of 300 frames (58 of them predicted).
   The position itself is not corrected.
 - A legend under the minimap, and the people count split per colour group.
 
-## H4 – Lens calibration made reproducible (plumb-line script), 2026-11-13
-
+## H4 – Lens calibration made reproducible (plumb-line script)
 **Why.** H2 chose the lens parameter k1 = −0.125 from a table of "deviation from a straight
 line", but no script in the repo produced that table (A1: unverified). Every rink position goes
 through this lens model, so the choice should be reproducible.
@@ -949,8 +938,7 @@ the far end. Looked at by Claude Code, not yet by a team member.
 (`fillempje_teams` = T2, `v3val_E2a`), instead of the alphabetically first ones (T1, E1 on the old
 4-frame val set).
 
-## P1 – Post-processing sweep (confidence + NMS) and error analysis of E2a, 2026-11-13
-
+## P1 – Post-processing sweep (confidence + NMS) and error analysis of E2a
 **Goal:** `eval_puck.py` and the app use one fixed setting (conf 0.25, NMS 0.7 inside a tile, 0.3
 between tiles). Measure what the confidence threshold and the two NMS steps cost or gain (course
 deck 5, slide 39 and discussion question 6), and find out which errors of E2a a threshold could
@@ -1030,12 +1018,11 @@ running the consistency check between two labellers, the blade rule (hypothesis 
 deliberately labelled blurred and airborne pucks or blur augmentation (hypothesis 2), and more
 far-away pucks (hypothesis 3).
 
-## E3 – Roboflow v4: the f5070 label fix, old models re-scored and the E2a recipe retrained, 2026-11-13
-
+## E3 – Roboflow v4: the f5070 label fix, old models re-scored and the E2a recipe retrained
 **Data.** Roboflow v4, generated and exported by Claude Code through the Roboflow connector at
 Andreas' request (same settings as v3: only the tag filter `fillempje`, no preprocessing or
 augmentation, YOLOv8 format). 63 images: 40 with a puck, 23 null. The only change from v3: the
-image f5070 (a stick blade labelled as puck, P1) is no longer in the project. Andreas removed it *(corrected 2026-11-14: first written as Finn)*
+image f5070 (a stick blade labelled as puck, P1) is no longer in the project. Andreas removed it *(corrected: first written as Finn)*
 instead of marking it null, so it is gone as a negative too.
 
 The blade rule decided by Andreas the same day (`annotation.md`) writes down what round 2 already
@@ -1109,3 +1096,49 @@ RTX 4060 Laptop, 0.43 h per run. Then per run:
 on v4: **tile mAP@50 0.59 ± 0.10, mAP@50:95 0.36 ± 0.06, full-frame recall 6/9 in every seed, AP@50
 0.67 ± 0.05.** The app keeps the original E2a weights (identical to v4 seed 0: the fewest false
 positives). The next gain still has to come from more and harder labels and a model-free test set.
+
+## TM2 – Team colours checked by a person: the TM1 sample labelled by Andreas
+
+**Goal:** TM1 scored the jersey clustering on 120 crops that Claude Code had labelled itself (95.5%),
+and those labels were not saved in `sample.csv`. A team member now labels the same 120 crops blind
+(without seeing the model's answer), and the clusters are scored against those labels.
+
+**Labelling:** Andreas, with `scripts/label_teams.py` (new: one detection at a time, enlarged next to
+the whole frame, keys w / b / o / u; the model's answer is not shown). The first 25 were typed in
+Excel from `sample.jpg`, the rest in the tool. Result: white 54, blue 36, other 25, unclear 5.
+
+**Command** (RTX 4060 Laptop; the clusters are the same as in TM1, `summary.json` cluster centres
+unchanged):
+```bash
+python scripts/teams.py --video Video/hockey_static_1080p.mp4 --players outputs/track/fillempje_teams/players.csv --keypoints configs/keypoints_hockey_static_1080p.json --names white other blue --score --name fillempje
+```
+
+| | TM1 (labels by Claude, 110 crops) | **TM2 (labels by Andreas, 115 crops)** |
+|---|---|---|
+| per detection | 101 / 110 = 91.8% | **106 / 115 = 92.2%** |
+| vote over the whole track | 98 / 110 = 89.1% | **100 / 115 = 87.0%** |
+| vote over the last 30 detections (used in the app) | 105 / 110 = 95.5% | **104 / 115 = 90.4%** |
+
+Confusion with Andreas' labels (rows = truth, columns = predicted white / blue / other):
+
+| truth | per detection | window vote |
+|---|---|---|
+| white (54) | 51 / 0 / 3 | 50 / 0 / 4 |
+| blue (36) | 1 / 32 / 3 | 4 / 29 / 3 |
+| other (25) | 2 / 0 / 23 | 0 / 0 / 25 |
+
+**Observations**
+1. **The clustering itself holds up:** 92% per detection, the same as with Claude's labels (92%).
+2. **The window vote does not help on these labels** (90.4% against 92.2% per detection: 2 crops
+   fewer). TM1 reported +4 crops for the vote; that gain came from Claude's labels and the window
+   length was tuned on them, so it was optimistic. The difference of 2 crops in 115 is within noise.
+3. **Where the vote hurts: blue read as white** (1 → 4). That matches TM1 observation 3: when a white
+   player crosses a blue one, ByteTrack can swap their IDs (T2), and the vote then carries the white
+   colour over to the blue player.
+4. **Andreas and Claude labelled differently:** 54 white / 36 blue against 43 / 41 in TM1. Claude's labels
+   were not saved, so we cannot say per crop where they differ.
+
+**Conclusion:** the honest number for the team colours is **about 90–92% on 115 crops checked by a
+person**, not 95.5%. The app keeps the window vote: it costs at most a few crops in accuracy but gives
+6× fewer colour flips on the minimap (TM1: 0.46 against 2.78 per 100 detections; that number does
+not depend on the labels).

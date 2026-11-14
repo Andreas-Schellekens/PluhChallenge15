@@ -30,7 +30,7 @@ Open, and to be done by the team (not by an AI):
 - Consistency check: round 1 done 2026-11-13 (Zjef labelled 10 frames blind; same puck in 0 of the 7 frames where either labeller saw one, presence agreement 5/10, mostly the blade question). Decided after it (2026-11-13): box margin 2 px and the ±10 frames check always; `label_blind.py` applies both (`--margin`, `--video` + key `v`). Still open: round 2 on 10 new frames from Roboflow v4, ideally with a third person (commands in `docs/annotation.md`, "Decisions after round 1").
 - f5070 removed in Roboflow (Andreas); v4 generated, tiles rebuilt, all models re-scored and the E2a recipe retrained over 3 seeds (E3, 2026-11-13).
 - A test set chosen without any model (the val set was partly built with E1, see A1).
-- A team member confirms the visual checks that Claude Code did (clip samples in E1/E2, the 110-crop team sample in TM1).
+- A team member confirms the visual checks that Claude Code did (clip samples in E1/E2; the TM1 team sample was checked by Andreas in TM2).
 - Complete `docs/genai.md`: own contributions and the statement.
 
 Gotcha: `data/puck_tiles/*/data.yaml` holds an absolute path; fix the `path:` line after moving the project.

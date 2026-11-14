@@ -12,19 +12,19 @@ We take an ice hockey clip, detect players, referees and the **puck**, and proje
 
 ## Status
 
-Main clip since 2026-10-30: `Video/hockey_static_1080p.mp4` (static camera behind the goal, 1080p; called `fillempje.mp4` until 2026-11-13, see below). The first clip (`hockey_clip_4k_noaudio.mp4`, handheld 4K) is kept as experiment history.
+Main clip: `Video/hockey_static_1080p.mp4` (static camera behind the goal, 1080p; called `fillempje.mp4`, see below). The first clip (`hockey_clip_4k_noaudio.mp4`, handheld 4K) is kept as experiment history.
 
 | Part | Status |
 |---|---|
 | Pretrained baseline (E0, E0-B) | Done: players OK, puck in only 10/2548 frames (high precision, almost no recall). See [`docs/experiments.md`](docs/experiments.md) |
-| Puck annotation (40–80 frames) | 64 human-reviewed frames: 41 with a puck + 23 verified without (2 rounds). See [`docs/annotation.md`](docs/annotation.md). Consistency check (2026-11-13, 10 frames, blind second labeller): low agreement, mostly the blade question. Decided 2026-11-13: box margin 2 px, ±10 frames check always, and the blade rule (Andreas). Open: second check round on Roboflow v4 |
+| Puck annotation (40–80 frames) | 64 human-reviewed frames: 41 with a puck + 23 verified without (2 rounds). See [`docs/annotation.md`](docs/annotation.md). Consistency check (10 frames, blind second labeller): low agreement, mostly the blade question. Decided: box margin 2 px, ±10 frames check always, and the blade rule (Andreas). Open: second check round on Roboflow v4 |
 | Puck fine-tuning + mAP@50 / mAP@50:95 | Done (E1, E2a, E2b, seed study S1). Best: E2a, tile val mAP@50 0.634 / mAP@50:95 0.382 for the run we use; over 3 seeds the same recipe gives 0.56 ± 0.06 / 0.31 ± 0.01. Full frames: recall 0/10 → 6/10 (in every seed) with 1 to 4 false positives, AP@50 0.01 → 0.65 (seed mean 0.59) vs baseline. Hard negatives gave no gain (S1) |
 | Homography + rink minimap | Done (H3): lens correction + 6 keypoints fitted in pixels, IIHF template. Near the camera good to decimetres, beyond the centre line only to several metres |
 | Streamlit dashboard | Done: `streamlit run app.py`, all parameters adjustable, clips can be added from the sidebar |
 | Extra Mile: tracking (T1, T2) | Done: ByteTrack player IDs + Kalman filter for the puck (puck on the minimap in 18% → 42% of frames). `scripts/track.py`, app tab Tracking |
-| Extra Mile: team colours (TM1) | Done: K-means on jersey colours splits white / blue / bystanders (95.5% on a 110-crop sample), plus occupancy heatmaps. `scripts/teams.py`, app tab Teams |
-| Review (A1) | 2026-11-11: code and log audited; the errors found are listed in the log with what was done about each |
-| Error analysis + conf/NMS sweep | 2026-11-13: confidence and both NMS steps measured for E2a (merge NMS essential: AP@50 0.65 → 0.40 without it; no threshold recovers the missed pucks, so conf 0.25 / NMS 0.7 / 0.3 stay). Errors sorted by the course's slide-38 categories and linked to annotation choices. See [`docs/error_analysis.md`](docs/error_analysis.md). Error types checked by Zjef: the val "puck" at f5070 is a stick blade (label error, to fix in v4) |
+| Extra Mile: team colours (TM1) | Done: K-means on jersey colours splits white / blue / bystanders (92% on a 115-crop sample labelled by a team member, TM2), plus occupancy heatmaps. `scripts/teams.py`, app tab Teams |
+| Review (A1) | code and log audited; the errors found are listed in the log with what was done about each |
+| Error analysis + conf/NMS sweep | confidence and both NMS steps measured for E2a (merge NMS essential: AP@50 0.65 → 0.40 without it; no threshold recovers the missed pucks, so conf 0.25 / NMS 0.7 / 0.3 stay). Errors sorted by the course's slide-38 categories and linked to annotation choices. See [`docs/error_analysis.md`](docs/error_analysis.md). Error types checked by Zjef: the val "puck" at f5070 is a stick blade (label error, to fix in v4) |
 
 ## Repository layout
 
@@ -41,6 +41,7 @@ scripts/
   kalman.py                  Kalman filter for the puck on the rink (predict / gate / update)
   track.py                   tracking over the clip: ByteTrack players + Kalman puck, gap test
   teams.py                   team colours: K-means on jersey colours, track vote, occupancy heatmaps
+  label_teams.py             label the team-colour check sample one player at a time (TM2)
   seed_summary.py            compares puck models over several training seeds (S1)
   make_puck_dataset.py       Roboflow export -> tiled dataset with a time-based train/val split
   train_puck.py              fine-tune YOLO26 on the puck tiles
@@ -100,14 +101,15 @@ No NVIDIA GPU? Install torch without `--index-url`. Everything still works, just
 
 Then put the clips in `Video/` (from the team drive): `hockey_static_1080p.mp4` (main) and `hockey_clip_4k_noaudio.mp4`.
 
-**Renamed 2026-11-13.** The main clip used to be `fillempje.mp4`. Rename your local copy to `Video/hockey_static_1080p.mp4` (the app also still recognises the old name). Run folders, datasets and the Roboflow tag keep the old name (`outputs/*/fillempje_*`, `data/frames/fillempje`, `data/puck_tiles/fillempje_*`), because the experiment log refers to them.
+**Renamed.** The main clip used to be `fillempje.mp4`. Rename your local copy to `Video/hockey_static_1080p.mp4` (the app also still recognises the old name). Run folders, datasets and the Roboflow tag keep the old name (`outputs/*/fillempje_*`, `data/frames/fillempje`, `data/puck_tiles/fillempje_*`), because the experiment log refers to them.
 
 ## Usage
 
-The dashboard (opens in the browser):
+The dashboard (opens in the browser). Start it with the Streamlit of the `.venv`: a plain `streamlit`
+without the venv activated can pick up a global Python install and stop with `No module named 'cv2'`.
 
 ```bash
-streamlit run app.py
+.venv\Scripts\streamlit run app.py
 ```
 
 The steps behind it, in order. Every command is also logged in `docs/experiments.md`.
@@ -204,9 +206,9 @@ python scripts/label_blind.py --frames data/consistency/round2 --labeller <name>
 python scripts/label_agreement.py compare --a data/roboflow/pluhchallenge_v3 --b data/roboflow/consistency_zjef --name round1
 ```
 
-Round 2 (agreed 2026-11-13, on Roboflow v4 and 10 new frames): the full `pick` / `label_blind` / `compare` commands are under "Decisions after round 1" in [`docs/annotation.md`](docs/annotation.md).
+Round 2 (agreed, on Roboflow v4 and 10 new frames): the full `pick` / `label_blind` / `compare` commands are under "Decisions after round 1" in [`docs/annotation.md`](docs/annotation.md).
 
-Moving the project to another PC: the `data.yaml` files in `data/puck_tiles/*/` hold an absolute path. Change the `path:` line to your own folder, or rebuild the dataset with `make_puck_dataset.py`. Rebuilding from the Roboflow v3 export (YOLOv8 format) gives exactly the same tiles: E2a's `best.pt` validates at the logged 0.634 / 0.382 on them (checked 2026-11-13).
+Moving the project to another PC: the `data.yaml` files in `data/puck_tiles/*/` hold an absolute path. Change the `path:` line to your own folder, or rebuild the dataset with `make_puck_dataset.py`. Rebuilding from the Roboflow v3 export (YOLOv8 format) gives exactly the same tiles: E2a's `best.pt` validates at the logged 0.634 / 0.382 on them.
 
 ## Team conventions
 

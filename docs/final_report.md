@@ -1,9 +1,9 @@
 # Hockey Vision & Tactical Mapping: final report
 
-Team PluhChallenge15 (Andreas, Finn, Mihai, Zjef) · Thomas More, Deep Learning – Computer Vision, challenge 2026–2027
+Team Challenge15 (Andreas, Finn, Mihai, Zjef) · Thomas More, Deep Learning – Computer Vision, challenge 2026–2027
 
 *Written with the help of Claude Code from our experiment log and saved run outputs; completed by the
-team, 2026-11-14. Every number links back to an entry in [`experiments.md`](experiments.md) (E = puck detector, H = homography, T = tracking,
+team. Every number links back to an entry in [`experiments.md`](experiments.md) (E = puck detector, H = homography, T = tracking,
 TM = teams, S = seed study, A = audit, P = post-processing). Figures are in `docs/report_img/`.*
 
 ---
@@ -68,7 +68,7 @@ approved, moved or rejected each one.
 Result: Roboflow v3, **64 frames**, 41 with a puck and 23 verified empty (the reviewer looked and the
 puck was hidden). The low proposal precision is the reason a human checked every label.
 
-**Final dataset: Roboflow v4 (2026-11-13), 63 frames, 40 with a puck.** The error analysis (§4) showed
+**Final dataset: Roboflow v4, 63 frames, 40 with a puck.** The error analysis (§4) showed
 that the val label at f5070 was a stick blade; the image was removed from the project and v4 was
 generated with the same settings. Train is unchanged; val now has 24 frames with 9 pucks.
 
@@ -77,7 +77,7 @@ generated with the same settings. Train is unchanged; val now has 24 frames with
 - **Occlusion:** label when ≥ 50% of the puck is visible. A fully hidden puck makes the frame a
   verified empty frame (useful as a negative). The same 50% rule cuts labels at tile edges.
 - **Doubt:** always check the ±10 neighbouring frames (a puck moves, tape and paint don't).
-- **Stick blade (decided 2026-11-13):** a puck touching the blade is labelled only when it can be told
+- **Stick blade (decided by Andreas):** a puck touching the blade is labelled only when it can be told
   apart from the blade, in the frame or in the ±10 neighbouring frames; when it really cannot, it is not
   labelled.
 
@@ -305,7 +305,7 @@ the log's 198 came from another GPU, see R1.)*
 
 *Teams tab: the colour groups and the K-means selection.*
 
-The app screenshots were taken by Claude Code with headless Chrome on the running app (2026-11-13).
+The app screenshots were taken by Claude Code with headless Chrome on the running app.
 
 ---
 
@@ -326,7 +326,10 @@ The app screenshots were taken by Claude Code with headless Chrome on the runnin
 ### 7.2 Team colours and heatmaps (TM1)
 K-means (k = 3) on jersey colour in CIELAB (75th percentile of L, mean a and b, standardised), with a
 vote over the last 30 detections of each track. It separates white team / blue team / bystanders at the
-boards with **95.5%** on a 110-crop sample (labelled by Claude Code; to be confirmed by a team member).
+boards with **92%** per detection on a 115-crop sample labelled blind by Andreas (TM2). The vote over
+the last 30 detections scores 90%: it does not raise the accuracy, but it gives 6× fewer colour flips on
+the minimap, so the app keeps it. An earlier score of 95.5% rested on labels by Claude Code and was too
+optimistic.
 
 ![Occupancy heatmaps](report_img/teams_heatmaps.jpg)
 
@@ -394,9 +397,19 @@ homography put the far goal ~70 m too far, its first Kalman test was too optimis
 Every team member is expected to explain the whole project on the oral exam. Details per part:
 [`genai.md`](genai.md).
 
+**Team contributions.** The main choices and agreements (sport and clip, labelling rules, which Extra
+Mile tracks, who does what) were made together in team meetings with everyone present. Besides that:
+
+| member | main contributions |
+|---|---|
+| **Andreas** | all labelling in Roboflow: reviewed every AI proposal and drew, moved or rejected the boxes for both rounds, removed f5070 and generated v4; the blind check of the team-colour sample (115 players, TM2); the blade rule; the documentation (annotation rules, GenAI statement, this report), with Claude Code drafting |
+| Finn | asked for the full audit (A1); decided the 2 px margin and the ±10 frames check after the consistency round |
+| Mihai | the original baseline runs on his PC (E0); asked for the lens calibration (H4) |
+| Zjef | the blind labelling round (consistency check); checked the five E2a errors and found that f5070 was a stick blade |
+
 **Reproduce.** Every entry in `experiments.md` lists its exact command; setup is in the README.
 Videos, datasets, weights and run outputs are not in git. Run folders and datasets still carry the clip's
-working name `fillempje` (renamed to `hockey_static_1080p` on 2026-11-13), because the log refers to them.
+working name `fillempje` (renamed to `hockey_static_1080p`), because the log refers to them.
 
 ---
 
@@ -419,7 +432,7 @@ outputs and an example command, and writes its results to `outputs/<step>/<run-n
 | evaluation | `scripts/seed_summary.py`, `scripts/sweep_conf_nms.py` | seed study; confidence and NMS sweep with every error as a crop |
 | homography | `scripts/rink.py`, `scripts/homography.py`, `scripts/calibrate_lens.py` | rink template, lens correction + homography, choosing k1 |
 | Extra Mile | `scripts/kalman.py`, `scripts/track.py` | Kalman filter for the puck, ByteTrack for players, gap test |
-| Extra Mile | `scripts/teams.py` | jersey colour clustering and occupancy heatmaps |
+| Extra Mile | `scripts/teams.py`, `scripts/label_teams.py` | jersey colour clustering and occupancy heatmaps; blind labelling of the check sample |
 | config | `configs/` | rink keypoints + lens model per clip, tuned ByteTrack settings |
 | documentation | `docs/` | experiment log, annotation rules, error analysis, GenAI use, this report |
 

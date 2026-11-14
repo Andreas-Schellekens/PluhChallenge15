@@ -5,7 +5,7 @@ into the categories from the course (deck 5, slide 38 "What can go wrong?"). The
 settings (confidence threshold, NMS) are measured first, so that we know which errors are a
 threshold problem and which are a model or data problem.
 
-**Status (2026-11-13).** Drafted by Claude Code. The numbers come from a saved run
+**Status.** Drafted by Claude Code. The numbers come from a saved run
 (`outputs/sweep/E2a_val/`, command below). **The 5 errors at the operating point were checked by
 Zjef** on enlarged crops; his verdicts are in "Team check" below. The enlarged crops
 (`errors_context.jpg`), the frame sequence of f5070 (`f5070_sequence.jpg`) and the extra columns
@@ -106,7 +106,7 @@ At the operating point E2a makes 5 errors on the val frames: 1 false positive an
 (`errors.csv`, `errors.jpg`, both written by the command; the enlarged `errors_context.jpg` was
 made ad hoc on Zjef's PC and is not reproduced by the script).
 
-### Team check (Zjef, 2026-11-13)
+### Team check (Zjef)
 
 Claude first typed the errors from the crops; Zjef then judged the enlarged crops himself.
 
@@ -177,10 +177,10 @@ on the current val set.
 
 ## To do (team)
 
-- [x] Check the 5 errors of E2a and fill in `category` in `errors.csv` (Zjef, 2026-11-13; his
+- [x] Check the 5 errors of E2a and fill in `category` in `errors.csv` (Zjef; his
       filled-in copy is not in the repo, and a rerun writes the column empty again).
 - [x] **Fix the f5070 label in Roboflow** (stick blade → mark the image null, or move the box if
-      someone finds the real puck), as part of v4. *(Done in Roboflow by Andreas, 2026-11-13; v4, E3.)*
+      someone finds the real puck), as part of v4. *(Done in Roboflow by Andreas; v4, E3.)*
 - [ ] Export v4, rebuild the tiles (`make_puck_dataset.py`), then rerun `eval_puck.py` and this
       sweep. Until then all logged val numbers still count f5070 as a puck.
 - [ ] A second person looks at f4950 (Zjef could not tell).
