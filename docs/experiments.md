@@ -1035,7 +1035,7 @@ far-away pucks (hypothesis 3).
 **Data.** Roboflow v4, generated and exported by Claude Code through the Roboflow connector at
 Andreas' request (same settings as v3: only the tag filter `fillempje`, no preprocessing or
 augmentation, YOLOv8 format). 63 images: 40 with a puck, 23 null. The only change from v3: the
-image f5070 (a stick blade labelled as puck, P1) is no longer in the project. Finn removed it
+image f5070 (a stick blade labelled as puck, P1) is no longer in the project. Andreas removed it *(corrected 2026-11-14: first written as Finn)*
 instead of marking it null, so it is gone as a negative too.
 
 The blade rule decided by Andreas the same day (`annotation.md`) writes down what round 2 already

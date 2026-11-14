@@ -384,11 +384,16 @@ distance and L had a 5× larger range than a/b. Standardising the features fixed
 
 ## 10. GenAI use, ownership and reproduction
 
-Claude Code (AI coding assistant) wrote most of the scripts and the app, proposed puck positions,
-ran trainings and drafted the documentation. The team chose the sport and clip, reviewed every label,
-made the labelling decisions, checked the errors and steered every step; details per part are in
-[`genai.md`](genai.md). Visual checks done by the AI are marked as such until a team member confirmed
-them. *TODO team: own statement, and who can explain which part on the oral exam.*
+We used GenAI (Claude Code) to help write the code, to understand the assignment better, and to give
+us ideas and options; the decisions were ours (sport and clip, which labels to keep, the labelling rules,
+the Extra Mile tracks, the model we use). Big choices were made in team meetings with everyone present,
+and the team members with a GPU ran and checked the code and results on their own PC.
+
+Checking the AI paid off: only 65–74% of its "confident" puck proposals were real pucks, its first
+homography put the far goal ~70 m too far, its first Kalman test was too optimistic, and a val label
+(f5070) turned out to be a stick blade. Visual checks done only by the AI are marked as such in the log.
+Every team member is expected to explain the whole project on the oral exam. Details per part:
+[`genai.md`](genai.md).
 
 **Reproduce.** Every entry in `experiments.md` lists its exact command; setup is in the README.
 Videos, datasets, weights and run outputs are not in git. Run folders and datasets still carry the clip's
