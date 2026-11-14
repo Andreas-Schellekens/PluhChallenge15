@@ -33,7 +33,7 @@ Outputs (in outputs/propose_puck/<clip>/, ignored by git):
   montage_XX.jpg        numbered zoomed crops of the top-k candidates per frame
 
 Usage:
-  python scripts/propose_puck.py --video Video/fillempje.mp4 --frames data/frames/fillempje       --detections outputs/baseline/fillempje_yolo26s_1280/detections.csv
+  python scripts/propose_puck.py --video Video/hockey_static_1080p.mp4 --frames data/frames/fillempje       --detections outputs/baseline/fillempje_yolo26s_1280/detections.csv
 """
 
 import argparse

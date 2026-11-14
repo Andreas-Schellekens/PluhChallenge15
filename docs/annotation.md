@@ -117,6 +117,8 @@ Split by time, not randomly: neighbouring frames are near-duplicates and would l
 
 # Clip 2: `fillempje.mp4` (main clip from 2026-10-30)
 
+*Renamed 2026-11-13:* this clip was called `fillempje.mp4` (and its config `keypoints_fillempje.json`); it is now `Video/hockey_static_1080p.mp4` with `configs/keypoints_hockey_static_1080p.json`. Commands and folder names in the entries below are kept as they were run (`outputs/*/fillempje_*`, `data/frames/fillempje`, the Roboflow tag `fillempje`); only the video and config path changed.
+
 ## Frames
 
 `python scripts/extract_frames.py --video Video/fillempje.mp4 --stride 30 --start 1.0`
@@ -383,7 +385,7 @@ Andreas reviewed), so A and B were made in different ways.
 | ±10 frames check | **adopted** (rule 3). `label_blind.py` now shows these frames when it gets the clip: `--video Video/fillempje.mp4`, key `v` |
 | box margin | **adopted**: visible puck + 2 px on each side (rule 1). `label_blind.py` adds the margin itself (`--margin 2`, the default) |
 | second consistency round | **agreed**, on 10 new frames, ideally with a third person |
-| f5070 (val label on a stick blade, P1) | **fixed in Roboflow** (reported by Finn). The fix goes into dataset v4 |
+| f5070 (val label on a stick blade, P1) | **removed in Roboflow by Andreas** *(corrected 2026-11-14: this said "reported by Finn")*. The fix is in dataset v4 (E3) |
 
 **Round 2: how to run it.** Export Roboflow v4 (YOLOv8 format, no resize) to
 `data/roboflow/pluhchallenge_v4`, then pick 10 new frames. The excluded frames are the 10 of round 1

@@ -1,7 +1,7 @@
 """Lens calibration (plumb-line method): choose k1 so that straight rink lines become straight.
 
 Why: a homography maps one plane to another and keeps straight lines straight. The action
-camera of fillempje.mp4 has a wide-angle lens that bends straight lines (barrel distortion),
+camera of the main clip (hockey_static_1080p.mp4) has a wide-angle lens that bends straight lines (barrel distortion),
 so homography.py first undoes it with a one-parameter radial model (homography.Lens):
 
     x_distorted = x * (1 + k1 * r^2)      x, r in units of the focal length f, from the image centre
@@ -36,7 +36,7 @@ Outputs (in outputs/lens/<name>/, ignored by git):
 
 Usage:
   python scripts/calibrate_lens.py
-  python scripts/calibrate_lens.py --background outputs/propose_puck/fillempje/background_color.jpg --name fillempje
+  python scripts/calibrate_lens.py --background outputs/propose_puck/fillempje/background_color.jpg --name hockey_static_1080p
 """
 
 import argparse
@@ -58,14 +58,14 @@ def parse_args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--background", default="outputs/propose_puck/fillempje/background_color.jpg",
                    help="median background of the clip (empty rink), from propose_puck.py")
-    p.add_argument("--keypoints", default="configs/keypoints_fillempje.json",
+    p.add_argument("--keypoints", default="configs/keypoints_hockey_static_1080p.json",
                    help="config with the lens f and centre (and the k1 in use, for comparison)")
     p.add_argument("--hsv-low", type=int, nargs=3, default=[18, 80, 100], help="lower HSV bound for yellow")
     p.add_argument("--hsv-high", type=int, nargs=3, default=[40, 255, 255], help="upper HSV bound for yellow")
     p.add_argument("--min-y", type=int, default=380, help="ignore rows above this (yellow advertising boards)")
     p.add_argument("--split-x", type=int, default=960, help="column that separates the left and right board")
     p.add_argument("--k1", type=float, nargs=3, default=[0.0, -0.3, -0.0125], help="scan: start stop step")
-    p.add_argument("--name", default="fillempje")
+    p.add_argument("--name", default="hockey_static_1080p")
     return p.parse_args()
 
 

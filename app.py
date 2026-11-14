@@ -34,6 +34,9 @@ from rink import Minimap  # noqa: E402
 from teams import load_model as load_team_model  # noqa: E402
 
 ROOT = Path(__file__).parent
+# The main clip was called fillempje.mp4 until 2026-11-13; a local copy under the old name still gets the right config.
+LEGACY_NAMES = {"fillempje": "hockey_static_1080p"}
+MAIN_CLIP = "hockey_static_1080p"
 st.set_page_config(page_title="Hockey Vision", layout="wide")
 
 
@@ -91,9 +94,10 @@ videos = sorted(str(p.relative_to(ROOT)) for p in (ROOT / "Video").glob("*.mp4")
 if not videos:
     st.error("No .mp4 in Video/. Upload one in the sidebar or put the clip there (see README).")
     st.stop()
-video = sb.selectbox("Video", videos, index=next((i for i, v in enumerate(videos) if "fillempje" in v), 0))
+video = sb.selectbox("Video", videos, index=next((i for i, v in enumerate(videos)
+                                                   if LEGACY_NAMES.get(Path(v).stem, Path(v).stem) == MAIN_CLIP), 0))
 configs = sorted(str(p.relative_to(ROOT)) for p in (ROOT / "configs").glob("keypoints_*.json"))
-stem = Path(video).stem
+stem = LEGACY_NAMES.get(Path(video).stem, Path(video).stem)
 kp_path = sb.selectbox("Rink keypoints", configs,
                        index=next((i for i, c in enumerate(configs) if stem in c), 0),
                        help="Hand-measured keypoints + lens model for this camera position")
@@ -144,7 +148,7 @@ lens_cfg = cfg.get("lens", {})
 k1 = sb.slider("Lens distortion k1", -0.3, 0.1, float(lens_cfg.get("k1", 0.0)), 0.005,
                help="0 = no lens correction. The config value straightens the board lines.")
 cfg_live = {**cfg, "lens": {**lens_cfg, "k1": k1}}
-drift = sb.radio("Camera motion", ["static", "SIFT to reference"], index=0 if "fillempje" in video else 1,
+drift = sb.radio("Camera motion", ["static", "SIFT to reference"], index=0 if stem == MAIN_CLIP else 1,
                  help="Handheld clips need per-frame matching to the reference frame")
 s.show_template = sb.checkbox("Draw rink template on the video", True)
 

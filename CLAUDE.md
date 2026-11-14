@@ -10,7 +10,7 @@ Pipeline: `.mp4` clip → object detection (players/referees + fine-tuned small 
 
 Scope: planar sports only (soccer, basketball, tennis, ice/field hockey), single static camera angle.
 
-**Our choice: ice hockey.** Main clip (since 2026-10-30): `Video/fillempje.mp4` (1920×1080, 59.94 fps, ~85 s, amateur game, static wide-angle action camera behind the near goal). The data gap is the **puck**: about 6–10 px, found by COCO YOLO in only 10/2548 frames (E0-B). Players and referees use pretrained COCO `person`. The homography needs lens correction (k1) and an IIHF rink template in metres; it uses 6 keypoints fitted in pixels (H3) and is only coarse (several metres) beyond the centre line. The first clip `Video/hockey_clip_4k_noaudio.mp4` (4K, handheld) is kept as experiment history (E0, H1).
+**Our choice: ice hockey.** Main clip (since 2026-10-30): `Video/hockey_static_1080p.mp4`, config `configs/keypoints_hockey_static_1080p.json` (called `fillempje` until 2026-11-13; run folders, datasets and the Roboflow tag keep that old name; 1920×1080, 59.94 fps, ~85 s, amateur game, static wide-angle action camera behind the near goal). The data gap is the **puck**: about 6–10 px, found by COCO YOLO in only 10/2548 frames (E0-B). Players and referees use pretrained COCO `person`. The homography needs lens correction (k1) and an IIHF rink template in metres; it uses 6 keypoints fitted in pixels (H3) and is only coarse (several metres) beyond the centre line. The first clip `Video/hockey_clip_4k_noaudio.mp4` (4K, handheld) is kept as experiment history (E0, H1).
 
 ## Repository layout
 
@@ -27,8 +27,8 @@ Experiment IDs: E = puck detector, H = homography, T = tracking, TM = teams, S =
 
 Open, and to be done by the team (not by an AI):
 - Blade rule decided (Andreas, 2026-11-13): a puck touching the stick blade is labelled only when it can be told apart from the blade (in the frame itself or in the ±10 neighbouring frames); when it really cannot, it is not labelled. It remains the main false positive of every model.
-- Consistency check: round 1 done 2026-11-13 (Zjef labelled 10 frames blind; same puck in 0 of the 7 frames where either labeller saw one, presence agreement 5/10, mostly the blade question). Decided after it (Finn, 2026-11-13): box margin 2 px and the ±10 frames check always; `label_blind.py` applies both (`--margin`, `--video` + key `v`). Still open: round 2 on 10 new frames from Roboflow v4, ideally with a third person (commands in `docs/annotation.md`, "Decisions after round 1").
-- f5070 removed in Roboflow (Finn); v4 generated, tiles rebuilt, all models re-scored and the E2a recipe retrained over 3 seeds (E3, 2026-11-13).
+- Consistency check: round 1 done 2026-11-13 (Zjef labelled 10 frames blind; same puck in 0 of the 7 frames where either labeller saw one, presence agreement 5/10, mostly the blade question). Decided after it (2026-11-13): box margin 2 px and the ±10 frames check always; `label_blind.py` applies both (`--margin`, `--video` + key `v`). Still open: round 2 on 10 new frames from Roboflow v4, ideally with a third person (commands in `docs/annotation.md`, "Decisions after round 1").
+- f5070 removed in Roboflow (Andreas); v4 generated, tiles rebuilt, all models re-scored and the E2a recipe retrained over 3 seeds (E3, 2026-11-13).
 - A test set chosen without any model (the val set was partly built with E1, see A1).
 - A team member confirms the visual checks that Claude Code did (clip samples in E1/E2, the 110-crop team sample in TM1).
 - Complete `docs/genai.md`: own contributions and the statement.

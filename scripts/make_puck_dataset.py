@@ -57,7 +57,7 @@ def parse_args():
     p.add_argument("--lookalike", type=int, nargs=2, action="append", default=[], metavar=("X", "Y"),
                    help="static look-alike point (image px); repeatable")
     p.add_argument("--ice-top", type=int, default=380,
-                   help="y above which there is only crowd/roof (380 for fillempje, ~600 for the 4K clip)")
+                   help="y above which there is only crowd/roof (380 for the main clip, ~600 for the 4K clip)")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--name", default="tiles640_v1", help="output folder name")
     return p.parse_args()

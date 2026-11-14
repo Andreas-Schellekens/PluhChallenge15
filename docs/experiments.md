@@ -123,6 +123,8 @@ vertically than horizontally, and more far from the camera. 10 px of foot error:
 
 # Clip 2: `fillempje.mp4` (main clip from 2026-10-30)
 
+*Renamed 2026-11-13:* this clip was called `fillempje.mp4` (and its config `keypoints_fillempje.json`); it is now `Video/hockey_static_1080p.mp4` with `configs/keypoints_hockey_static_1080p.json`. Commands and folder names in the entries below are kept as they were run (`outputs/*/fillempje_*`, `data/frames/fillempje`, the Roboflow tag `fillempje`); only the video and config path changed.
+
 **Why we switched.** The 4K clip was handheld, so the camera moved, and it showed only 12
 frames with a findable puck. The new clip matches the assignment's "single static camera"
 much better.
@@ -1033,7 +1035,7 @@ far-away pucks (hypothesis 3).
 **Data.** Roboflow v4, generated and exported by Claude Code through the Roboflow connector at
 Andreas' request (same settings as v3: only the tag filter `fillempje`, no preprocessing or
 augmentation, YOLOv8 format). 63 images: 40 with a puck, 23 null. The only change from v3: the
-image f5070 (a stick blade labelled as puck, P1) is no longer in the project. Finn removed it
+image f5070 (a stick blade labelled as puck, P1) is no longer in the project. Andreas removed it *(corrected 2026-11-14: first written as Finn)*
 instead of marking it null, so it is gone as a negative too.
 
 The blade rule decided by Andreas the same day (`annotation.md`) writes down what round 2 already

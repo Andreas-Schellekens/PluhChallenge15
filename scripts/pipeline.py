@@ -27,7 +27,7 @@ from teams import TrackVote, jersey_colour, nearest_centre  # noqa: F401 (TrackV
 
 PERSON = 0
 # A person box that ends this close to the bottom of the frame is cut off by it. YOLO stops such
-# boxes 2-5 px short of the border (measured on fillempje: they end at y = 1075-1078 of 1080).
+# boxes 2-5 px short of the border (measured on the main clip: they end at y = 1075-1078 of 1080).
 EDGE_PX = 8
 TRACK_CONF = 0.1  # detector threshold while tracking: ByteTrack needs the low-confidence boxes too
 PLAYER_COL, OFF_ICE_COL, PUCK_COL = (0, 140, 255), (160, 160, 160), (0, 0, 0)  # BGR

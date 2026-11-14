@@ -14,7 +14,7 @@ TM = teams, S = seed study, A = audit, P = post-processing). Figures are in `doc
 **Goal.** Take an ice-hockey clip, detect players, referees and the puck, and show every player on a
 top-down rink map that plays in sync with the video, in a local dashboard.
 
-**Clip.** `fillempje.mp4`: amateur game, 1920×1080, 59.94 fps, ~85 s, one static wide-angle action
+**Clip.** `hockey_static_1080p.mp4`: amateur game, 1920×1080, 59.94 fps, ~85 s, one static wide-angle action
 camera behind the near goal. (Our first clip, a handheld 4K NHL clip, was dropped after E0/H1
 because the camera moved and the puck was rarely findable.)
 
@@ -341,7 +341,7 @@ distance and L had a 5× larger range than a/b. Standardising the features fixed
 | problem | what we saw | solution |
 |---|---|---|
 | foundation-model auto-labelling failed | Gemini boxed the wrong spot, SAM 3 gave 6 "pucks" in one frame | own proposal step (background subtraction, later our own model) + human review of every label |
-| first clip unsuitable | handheld 4K, camera moved, only ~12 frames with a findable puck | switched to a static camera clip (`fillempje.mp4`) |
+| first clip unsuitable | handheld 4K, camera moved, only ~12 frames with a findable puck | switched to a static camera clip (`hockey_static_1080p.mp4`) |
 | puck too small for YOLO | 6–10 px becomes 2–3 px after resizing | training and inference on native-resolution 640 px tiles |
 | duplicate puck boxes | the same puck found by two overlapping tiles | a second (merge) NMS step; measured as essential in P1 |
 | lens distortion | board lines curved, homography inaccurate | radial lens model, k1 chosen by the plumb-line method (H2, made reproducible in H4) |
@@ -384,11 +384,17 @@ distance and L had a 5× larger range than a/b. Standardising the features fixed
 
 ## 10. GenAI use, ownership and reproduction
 
-Claude Code (AI coding assistant) wrote most of the scripts and the app, proposed puck positions,
-ran trainings and drafted the documentation. The team chose the sport and clip, reviewed every label,
-made the labelling decisions, checked the errors and steered every step; details per part are in
-[`genai.md`](genai.md). Visual checks done by the AI are marked as such until a team member confirmed
-them. *TODO team: own statement, and who can explain which part on the oral exam.*
+We used GenAI (Claude Code) to help write the code, to understand the assignment better, and to give
+us ideas and options; the decisions were ours (sport and clip, which labels to keep, the labelling rules,
+the Extra Mile tracks, the model we use). Big choices were made in team meetings with everyone present,
+and the team members with a GPU ran and checked the code and results on their own PC.
+
+Checking the AI paid off: only 65–74% of its "confident" puck proposals were real pucks, its first
+homography put the far goal ~70 m too far, its first Kalman test was too optimistic, and a val label
+(f5070) turned out to be a stick blade. Visual checks done only by the AI are marked as such in the log.
+Every team member is expected to explain the whole project on the oral exam. Details per part:
+[`genai.md`](genai.md).
 
 **Reproduce.** Every entry in `experiments.md` lists its exact command; setup is in the README.
-Videos, datasets, weights and run outputs are not in git.
+Videos, datasets, weights and run outputs are not in git. Run folders and datasets still carry the clip's
+working name `fillempje` (renamed to `hockey_static_1080p` on 2026-11-13), because the log refers to them.

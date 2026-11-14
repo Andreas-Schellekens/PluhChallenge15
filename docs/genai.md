@@ -1,8 +1,8 @@
 # GenAI use
 
 How generative AI was used in this project, what the team decided and checked, and where
-the limits were. **Draft by Claude Code (2026-11-05, updated 2026-11-11 and 2026-11-13), to be completed and confirmed by the
-team.** Check it against the course GenAI policy for any required format or wording.
+the limits were. Drafted by Claude Code (2026-11-05, updated 2026-11-11 and 2026-11-13); completed by the team on
+2026-11-14 (team contributions and the statement).
 
 ## Tools
 
@@ -16,28 +16,26 @@ team.** Check it against the course GenAI policy for any required format or word
 
 | part | what the AI did | what the team decided or checked |
 |---|---|---|
-| Scope and data | – | chose ice hockey; switched to `fillempje.mp4` because the 4K clip was handheld and showed few pucks; processed the teacher feedback (fine-tune + comparison, working homography, frontend with parameters) |
-| Baseline (E0, E0-B) | wrote `baseline.py`, ran it, summarised the numbers | – |
+| Scope and data | – | chose ice hockey; switched to `fillempje.mp4` (renamed `hockey_static_1080p.mp4` on 2026-11-13) because the 4K clip was handheld and showed few pucks. These choices were made in team meetings with everyone present |
+| Baseline (E0, E0-B) | wrote `baseline.py`, ran it, summarised the numbers | re-run by the team members with a GPU (the GPU is noted in every log entry) |
 | Labelling (rounds 1 and 2) | proposed candidates: background subtraction (`propose_puck.py`), later our own model (`propose_model.py`); sorted them into confident / unsure / wrong; uploaded them as **predictions to Roboflow Review** | **Andreas reviewed every label**: approved, rejected, moved or drew boxes, and checked 24 frames by hand (23 marked null). No AI label entered the dataset without human approval |
-| Labelling rules | drafted the rules (box size, ≥ 50% visible, null images, time split) | to be confirmed by the team; open question: does a puck touching the stick blade count |
+| Labelling rules | drafted the rules (box size, ≥ 50% visible, null images, time split) | discussed in team meetings; the blade rule was decided by Andreas on 2026-11-13 |
 | Fine-tuning (E1, E2a, E2b) | wrote `make_puck_dataset.py`, `train_puck.py`, `eval_puck.py`; chose the tiling, augmentations and settings and explained why; ran training and evaluation | chose to do a second labelling round |
 | Homography (H1, H2) | wrote `homography.py` and `rink.py`, measured the keypoints, fitted the lens correction | visual check of the overlay |
 | Tracking (T1) | wrote `kalman.py`, `track.py` and the tuned ByteTrack config; designed the gap test | chose tracking as the Extra Mile, after options were explained |
-| App | wrote `app.py` and `pipeline.py`, tested them in the browser | – |
+| App | wrote `app.py` and `pipeline.py`, tested them in the browser | run and tried by the team members with a GPU |
 | Error analysis | checked samples visually and wrote the analyses in `experiments.md` | – |
 | Audit (A1, 2026-11-11) | a second Claude Code agent read all scripts and compared every number in the docs with the saved outputs; the main session verified the findings and fixed them (homography, gap test, dataset random stream, lens mask, app) | Finn asked for the full check and gave the go-ahead |
-| Homography (H3) | found that the far goal landed at about 100 m, measured two more keypoints, changed the fit to pixels | to do: visual check of the new overlay |
-| Team colours (TM1) | wrote `teams.py`; found and fixed the failed first version (features not scaled); **labelled the 120-crop sample itself** | chose team colours as the second Extra Mile; to do: confirm the sample labels |
-| Seed study (S1) | wrote `seed_summary.py`, ran the six training runs, wrote the analysis | to do: look at the false positives of the seed runs (only counted so far) |
+| Homography (H3) | found that the far goal landed at about 100 m, measured two more keypoints, changed the fit to pixels | the new overlay is not yet checked by a team member |
+| Team colours (TM1) | wrote `teams.py`; found and fixed the failed first version (features not scaled); **labelled the 120-crop sample itself** | chose team colours as the second Extra Mile; the 110 sample labels are Claude's and not checked by a team member |
+| Seed study (S1) | wrote `seed_summary.py`, ran the six training runs, wrote the analysis | the false positives of the seed runs were only counted, not looked at by a team member |
 | Local setup on Mihai's PC (2026-11-13) | rebuilt the puck tiles from the Roboflow v3 export, unpacked the team's outputs, re-validated the E2a weights (0.635 / 0.382, same as logged); found that the Quadro T1000 (4 GB) cannot train the puck model in reasonable time (about 45 h per run) | Mihai asked for it and supplied the team's export; the E0 outputs of his original runs (2026-10-16, his PC) confirm the `yolo26s_640` row and the Quadro fps that A1 listed as unverified |
-| Lens calibration (H4, 2026-11-13) | wrote `calibrate_lens.py` (plumb-line scan over k1 with an exact inverse of the lens model), ran it, wrote the H4 entry; found that `Lens.undistort` (5 OpenCV iterations) is up to ~2 px off near the image edge; set the app's Tracking and Puck model tabs to the current runs | Mihai asked for it, after A1 listed the H2 k1 table as unreproducible; to do: visual check of `mask.jpg` and `straightened.jpg`; the team decides whether to fix `Lens.undistort` (it would change T2/TM1 slightly) |
-| Conf/NMS sweep and error analysis (P1, 2026-11-13) | wrote `sweep_conf_nms.py`, `docs/error_analysis.md` and the P1 entry; ran the sweep; typed the five E2a errors first from the crops. The error types quoted from other runs (E1, E2b) are Claude's visual checks, not yet confirmed by a team member | **Zjef checked the five E2a error types on enlarged crops**; the conclusion that the val "puck" at f5070 is a stick blade is his. To do: fix the f5070 label in Roboflow (v4); a second person looks at f4950 |
-| Consistency check, round 1 (2026-11-13) | wrote `label_agreement.py` and `label_blind.py`; described what the disagreement frames show (not yet checked by Andreas) | **Zjef labelled the 10 frames blind**; his reasons for the disagreements are his own answers. The proposed rules (blade rule, ±10 frames check, box margin) were decided afterwards by Finn, see the next row |
-| Labelling decisions after round 1 (2026-11-13) | added the ±10 frames view (`--video`, key `v`) and the automatic 2 px margin (`--margin`) to `label_blind.py`; wrote the decisions and the round-2 commands into `annotation.md`; tested on a synthetic video, including a simulated labelling session with scripted keys and clicks (not yet by a person with the real clip) | **Finn decided**: 2 px margin and ±10 frames check adopted, no blade rule for now, a second round agreed; Finn fixed f5070 in Roboflow |
-| Roboflow v4, retraining and final report (E3, 2026-11-13) | generated and exported Roboflow v4 through the Roboflow connector; rebuilt the tiles, re-scored E1/E2a/E2b, retrained the E2a recipe over 3 seeds; wrote the E3 entry and the draft `docs/final_report.md`; took the app screenshots with headless Chrome and rendered the training console screenshot from the saved log | Andreas asked for v4 and the report and decided the blade rule; Finn removed f5070 in Roboflow. To do: the team reads and completes the report |
+| Lens calibration (H4, 2026-11-13) | wrote `calibrate_lens.py` (plumb-line scan over k1 with an exact inverse of the lens model), ran it, wrote the H4 entry; found that `Lens.undistort` (5 OpenCV iterations) is up to ~2 px off near the image edge; set the app's Tracking and Puck model tabs to the current runs | Mihai asked for it, after A1 listed the H2 k1 table as unreproducible; `mask.jpg` and `straightened.jpg` are not checked by a team member; `Lens.undistort` was left as it is |
+| Conf/NMS sweep and error analysis (P1, 2026-11-13) | wrote `sweep_conf_nms.py`, `docs/error_analysis.md` and the P1 entry; ran the sweep; typed the five E2a errors first from the crops. The error types quoted from other runs (E1, E2b) are Claude's visual checks, not yet confirmed by a team member | **Zjef checked the five E2a error types on enlarged crops**; the conclusion that the val "puck" at f5070 is a stick blade is his. Andreas removed f5070 in Roboflow (v4, E3). f4950 stays unclear |
+| Consistency check, round 1 (2026-11-13) | wrote `label_agreement.py` and `label_blind.py`; described what the disagreement frames show (not yet checked by Andreas) | **Zjef labelled the 10 frames blind**; his reasons for the disagreements are his own answers. Afterwards Finn decided the ±10 frames check and the box margin (next row) and Andreas the blade rule |
+| Labelling decisions after round 1 (2026-11-13) | added the ±10 frames view (`--video`, key `v`) and the automatic 2 px margin (`--margin`) to `label_blind.py`; wrote the decisions and the round-2 commands into `annotation.md`; tested on a synthetic video, including a simulated labelling session with scripted keys and clicks (not yet by a person with the real clip) | **Finn decided**: 2 px margin and ±10 frames check adopted, no blade rule for now (Andreas decided it later the same day), a second round agreed |
+| Roboflow v4, retraining and final report (E3, 2026-11-13) | generated and exported Roboflow v4 through the Roboflow connector; rebuilt the tiles, re-scored E1/E2a/E2b, retrained the E2a recipe over 3 seeds; wrote the E3 entry and the draft `docs/final_report.md`; took the app screenshots with headless Chrome and rendered the training console screenshot from the saved log | Andreas asked for v4 and the report, decided the blade rule and removed f5070 in Roboflow; the team reads the report before the upload |
 
-*Team: complete this table with your own contributions (for example Mihai's part, extra
-checks you did yourselves, and decisions made in team meetings).*
 
 ## How AI output was verified
 
@@ -68,7 +66,21 @@ checks you did yourselves, and decisions made in team meetings).*
 - **Data.** No personal data was sent to AI services beyond the match video frames. Videos,
   datasets and weights are not in git.
 
-## Statement (to be completed by the team)
+## Statement
 
-*Describe here in your own words how you used GenAI, what you learned from it, and which parts
-you can defend yourselves.*
+We used GenAI (Claude Code) in three ways: to help write the code, to understand the assignment better,
+and to give us ideas and options. The decisions were ours: which sport and clip, which labels to keep,
+the labelling rules, which Extra Mile tracks to do and which model to use. All big choices were
+discussed in team meetings with everyone present, and the team members with a GPU ran and checked the
+code and the results on their own PC.
+
+Checking the AI was necessary, and it paid off. Examples where the AI's output was wrong or too
+optimistic and we caught it:
+
+- only 65–74% of the AI's "confident" puck proposals were real pucks, so every label was reviewed by a person;
+- the first homography put the far goal about 70 m too far away (H3);
+- the first test of the Kalman filter made it look better than it was (A1, T2);
+- a val label (f5070) turned out to be a stick blade, found when we checked the model's errors by hand (P1).
+
+Every team member is expected to explain the whole project on the oral exam, so we go through each part of
+the pipeline together before the exam.

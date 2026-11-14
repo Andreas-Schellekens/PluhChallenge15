@@ -28,7 +28,7 @@ Outputs (outputs/track/<name>/, ignored by git):
   (left: per-frame detections as before, right: with tracking)
 
 Usage:
-  python scripts/track.py --video Video/fillempje.mp4 --keypoints configs/keypoints_fillempje.json --puck-weights outputs/train/fillempje_v3_yolo26s_puck_640/weights/best.pt --name fillempje_E2a
+  python scripts/track.py --video Video/hockey_static_1080p.mp4 --keypoints configs/keypoints_hockey_static_1080p.json --puck-weights outputs/train/fillempje_v3_yolo26s_puck_640/weights/best.pt --name fillempje_E2a
 """
 
 import argparse

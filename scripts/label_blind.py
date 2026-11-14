@@ -37,7 +37,7 @@ Outputs (ignored by git):
   data/roboflow/consistency_<labeller>/decisions.csv        per frame: puck / none / unsure, box in px
 
 Usage:
-  python scripts/label_blind.py --frames data/consistency/round2 --labeller <name> --video Video/fillempje.mp4
+  python scripts/label_blind.py --frames data/consistency/round2 --labeller <name> --video Video/hockey_static_1080p.mp4
   python scripts/label_agreement.py compare --a data/roboflow/pluhchallenge_v4 --b data/roboflow/consistency_<name> --name round2
 Round 1 (2026-11-13) was labelled without --video and without the margin (the box was taken as drawn).
 """
