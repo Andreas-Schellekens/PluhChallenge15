@@ -56,10 +56,11 @@ configs/
   keypoints_hockey_static_1080p.json   rink keypoints + lens model for the main clip
   keypoints_hockey_clip_4k.json   same for the first clip
 docs/
+  final_report.md            final report (overview + documentation), figures in report_img/
   experiments.md             experiment log: one entry per run (config, results, conclusions)
   annotation.md              puck labelling rules, review status and split plan
   error_analysis.md          puck detector errors by type (course slide 38) + the conf/NMS sweep
-  genai.md                   how GenAI was used, what the team checked (draft, to complete)
+  genai.md                   how GenAI was used and what the team decided and checked
 Video/                       input clips              (not in git; share via the team drive)
 data/                        annotated datasets       (not in git)
 outputs/                     run outputs, weights     (not in git; reproduce from the logged command)

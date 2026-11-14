@@ -1,8 +1,9 @@
-"""Build a tiled puck dataset from the Roboflow export (YOLO format, full 4K frames).
+"""Build a tiled puck dataset from the Roboflow export (YOLO format, full-resolution frames).
 
-Goal: train the puck detector at the puck's NATIVE resolution. E0 showed that
-feeding the whole 4K frame to YOLO shrinks the ~15 px puck to ~5 px (imgsz 1280),
-below the finest feature map. So we cut 640x640 crops out of the 4K frames: the
+Goal: train the puck detector at the puck's NATIVE resolution. E0/E0-B showed that
+feeding the whole frame to YOLO shrinks the puck below the finest feature map (main
+clip, 1080p: a 6-10 px puck becomes 2-3 px at imgsz 640; first clip, 4K: ~15 px becomes
+~5 px at imgsz 1280). So we cut 640x640 crops out of the full frames: the
 model sees the puck at its real size, and at test time we tile the frame the
 same way (see scripts/eval_puck.py).
 
@@ -33,7 +34,7 @@ Outputs (in data/puck_tiles/<name>/, ignored by git):
   frames.csv       which full frame went to which split (used by eval_puck.py)
 
 Usage:
-  python scripts/make_puck_dataset.py --export data/roboflow/pluhchallenge_v2 --val-from-frame 4200       --name fillempje_tiles640
+  python scripts/make_puck_dataset.py --export data/roboflow/pluhchallenge_v4 --val-from-frame 4200 --name fillempje_v4_tiles640
 """
 
 import argparse

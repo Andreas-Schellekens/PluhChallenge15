@@ -2,9 +2,8 @@
 
 Team PluhChallenge15 (Andreas, Finn, Mihai, Zjef) · Thomas More, Deep Learning – Computer Vision, challenge 2026–2027
 
-*Draft of 2026-11-13, written by Claude Code from the experiment log and the saved run outputs, to be
-read, corrected and completed by the team before the final upload. Every number links back to an
-entry in [`experiments.md`](experiments.md) (E = puck detector, H = homography, T = tracking,
+*Written with the help of Claude Code from our experiment log and saved run outputs; completed by the
+team, 2026-11-14. Every number links back to an entry in [`experiments.md`](experiments.md) (E = puck detector, H = homography, T = tracking,
 TM = teams, S = seed study, A = audit, P = post-processing). Figures are in `docs/report_img/`.*
 
 ---
@@ -398,3 +397,31 @@ Every team member is expected to explain the whole project on the oral exam. Det
 **Reproduce.** Every entry in `experiments.md` lists its exact command; setup is in the README.
 Videos, datasets, weights and run outputs are not in git. Run folders and datasets still carry the clip's
 working name `fillempje` (renamed to `hockey_static_1080p` on 2026-11-13), because the log refers to them.
+
+---
+
+## 11. Code overview
+
+The code is in the GitHub repository (and the attached zip). Every script has a docstring with its goal,
+outputs and an example command, and writes its results to `outputs/<step>/<run-name>/`.
+
+| step in the pipeline | file | what it does |
+|---|---|---|
+| app | `app.py` | Streamlit dashboard: video next to the minimap, all parameters in the sidebar |
+| app | `scripts/pipeline.py` | per frame: detect players and puck → map to the rink → draw |
+| baseline | `scripts/baseline.py` | pretrained COCO YOLO on a clip (E0) |
+| annotation | `scripts/extract_frames.py` | candidate frames at full resolution |
+| annotation | `scripts/propose_puck.py`, `scripts/propose_model.py` | assisted labelling: puck proposals for Roboflow Review (round 1: background subtraction, round 2: our model) |
+| annotation | `scripts/label_agreement.py`, `scripts/label_blind.py` | consistency check between two labellers |
+| fine-tuning | `scripts/make_puck_dataset.py` | Roboflow export → 640 px tiles, split by time |
+| fine-tuning | `scripts/train_puck.py` | fine-tune YOLO26s on the tiles, log mAP@50 / mAP@50:95 |
+| evaluation | `scripts/eval_puck.py` | baseline vs fine-tuned on full frames (tiled inference, AP@50, confusion matrix) |
+| evaluation | `scripts/seed_summary.py`, `scripts/sweep_conf_nms.py` | seed study; confidence and NMS sweep with every error as a crop |
+| homography | `scripts/rink.py`, `scripts/homography.py`, `scripts/calibrate_lens.py` | rink template, lens correction + homography, choosing k1 |
+| Extra Mile | `scripts/kalman.py`, `scripts/track.py` | Kalman filter for the puck, ByteTrack for players, gap test |
+| Extra Mile | `scripts/teams.py` | jersey colour clustering and occupancy heatmaps |
+| config | `configs/` | rink keypoints + lens model per clip, tuned ByteTrack settings |
+| documentation | `docs/` | experiment log, annotation rules, error analysis, GenAI use, this report |
+
+**Run it.** Install as in the README (PyTorch with CUDA first, then `requirements.txt`), put the clip in
+`Video/` and start the app with `streamlit run app.py`.

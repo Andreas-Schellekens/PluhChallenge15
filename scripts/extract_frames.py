@@ -1,12 +1,12 @@
 """Extract candidate frames from a clip for puck annotation.
 
 Goal: get full-resolution frames to choose the 40-80 annotation frames from. We
-keep the original resolution because the puck is only ~15 px wide at 4K; any
-downscaling here would make it even harder to label precisely.
+keep the original resolution because the puck is tiny (6-10 px in the 1080p main
+clip, ~15 px in the 4K first clip); any downscaling would make it even harder to label.
 
-Consecutive frames at 30 fps are near-duplicates, so we only keep every n-th
-frame (--stride). With the default stride of 10 on a 31 s clip that is ~93
-candidates (one every 1/3 s), enough choice to pick the hard frames
+Consecutive frames are near-duplicates, so we only keep every n-th frame
+(--stride). The main clip (59.94 fps) used --stride 30: one frame every 0.5 s,
+168 candidates; the first clip (30 fps) used the default 10. Enough choice to pick the hard frames
 (blur, occlusion, crowded areas) and some frames without a visible puck.
 
 Outputs (in data/frames/<clip-name>/, ignored by git):
